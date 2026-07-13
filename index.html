@@ -68,6 +68,14 @@
   #npcView:active{cursor:grabbing}
   #npcViewName{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:10px;
     letter-spacing:1.2px;text-transform:uppercase;color:var(--gold-dim);pointer-events:none}
+  /* gpu load lab */
+  #lab{position:fixed;right:18px;bottom:18px;width:320px;z-index:60;background:var(--panel);
+    border:1px solid var(--gold-dim);border-radius:12px;padding:10px 12px;box-shadow:0 8px 30px #000a}
+  #lab .labHead{display:flex;align-items:center;font-size:11px;letter-spacing:1.5px;color:var(--gold);margin-bottom:8px}
+  #labGL{width:100%;height:170px;border-radius:8px;background:#0a0812;display:block}
+  #lab .labStats{display:flex;gap:14px;font-size:12px;color:var(--dim);margin:8px 0 4px}
+  #lab .labStats b{color:var(--ink);font-family:var(--mono)}
+  #labTok{margin-left:auto;color:#8fd49a;font-family:var(--mono)}
   /* quest cards */
   .qcard{background:linear-gradient(180deg,#221a33,#1b1527);border:1px solid var(--gold-dim);
     border-radius:12px;padding:16px 18px;position:relative;animation:rise .35s ease}
@@ -111,7 +119,22 @@
   <select id="modelSel" title="Ollama model" style="width:230px"></select>
   <button class="ghost" id="pullBtn" style="display:none" title="Download the selected model via Ollama">⬇ pull</button>
   <button class="ghost" id="cfgBtn" title="LLM settings">⚙</button>
+  <button class="ghost" id="labBtn" title="GPU Load Lab: render a game-like GPU load while the LLM generates, and watch FPS vs tokens/sec">⚡ lab</button>
 </header>
+
+<!-- GPU Load Lab overlay -->
+<div id="lab" style="display:none">
+  <div class="labHead">GPU LOAD LAB <span class="spacer"></span><button class="ghost" id="labClose" style="padding:2px 8px">✕</button></div>
+  <canvas id="labGL" width="300" height="170"></canvas>
+  <div class="labStats">
+    <span>FPS <b id="labFps">–</b></span>
+    <span>worst <b id="labWorst">–</b> ms</span>
+    <span id="labTok">LLM idle</span>
+  </div>
+  <input type="range" id="labLoad" min="10" max="19" value="14" style="width:100%">
+  <div class="small" id="labLoadLbl"></div>
+  <div class="small" style="margin-top:4px">Raise the load to game-like FPS, then <b>✦ Weave</b> a quest and watch the two compete for the GPU.</div>
+</div>
 
 <main>
   <!-- ============ CURATED QUEST ============ -->
@@ -864,6 +887,117 @@ const NpcViewer = (() => {
   return {update};
 })();
 
+/* ---------------- GPU Load Lab: WebGL stress scene + FPS vs tok/s ---------------- */
+const LoadLab = (() => {
+  let gl=null, prog=null, uTime=null, uProj=null, uAspect=null, started=false, open=false;
+  let frames=[], lastT=0, tokTimes=[], genLive=false, uiAt=0;
+
+  const VS = `#version 300 es
+  layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm; layout(location=2) in float aSeed;
+  uniform float uTime; uniform mat4 uProj;
+  out vec3 vN; out float vH;
+  float h(float n){ return fract(sin(n)*43758.5453); }
+  mat3 rotY(float a){ float c=cos(a),s=sin(a); return mat3(c,0.,-s, 0.,1.,0., s,0.,c); }
+  mat3 rotX(float a){ float c=cos(a),s=sin(a); return mat3(1.,0.,0., 0.,c,s, 0.,-s,c); }
+  void main(){
+    float s=aSeed;
+    vec3 c=(vec3(h(s),h(s+1.),h(s+2.))*2.-1.)*13.;
+    mat3 R=rotY(uTime*(.4+h(s+3.))+s)*rotX(uTime*.7*h(s+5.)+s);
+    vec3 p=rotY(uTime*.08)*(R*aPos*.22+c);
+    p.z-=22.;
+    gl_Position=uProj*vec4(p,1.);
+    vN=R*aNrm; vH=h(s+4.);
+  }`;
+  const FS = `#version 300 es
+  precision mediump float;
+  in vec3 vN; in float vH; out vec4 o;
+  void main(){
+    float d=max(0.,dot(normalize(vN),normalize(vec3(-.4,.7,.6))));
+    vec3 a=mix(vec3(.48,.36,.95),vec3(.95,.72,.35),vH);
+    o=vec4(a*(.25+.75*d),1.);
+  }`;
+
+  function init(){
+    const cv=$("labGL");
+    gl=cv.getContext("webgl2",{antialias:false,powerPreference:"high-performance"});
+    if(!gl){ $("labLoadLbl").textContent="WebGL2 unavailable in this browser."; return false; }
+    const sh=(t,src)=>{const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);
+      if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s;};
+    prog=gl.createProgram();
+    gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS)); gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));
+    gl.linkProgram(prog);
+    if(!gl.getProgramParameter(prog,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    gl.useProgram(prog);
+    uTime=gl.getUniformLocation(prog,"uTime"); uProj=gl.getUniformLocation(prog,"uProj");
+    // cube: 6 faces * 2 tris, positions+normals
+    const P=[],N=[],F=[[0,0,1],[0,0,-1],[1,0,0],[-1,0,0],[0,1,0],[0,-1,0]];
+    for(const n of F){
+      const u=n[1]||n[2]?[1,0,0]:[0,1,0], v=[n[1]*u[2]-n[2]*u[1],n[2]*u[0]-n[0]*u[2],n[0]*u[1]-n[1]*u[0]];
+      const c=[[-1,-1],[1,-1],[1,1],[-1,-1],[1,1],[-1,1]];
+      for(const [a,b] of c){ P.push(n[0]+a*u[0]+b*v[0], n[1]+a*u[1]+b*v[1], n[2]+a*u[2]+b*v[2]); N.push(...n); }
+    }
+    const bind=(loc,data,size,divisor)=>{
+      const b=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,b);
+      gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,size,gl.FLOAT,false,0,0);
+      if(divisor) gl.vertexAttribDivisor(loc,divisor);
+    };
+    bind(0,new Float32Array(P),3,0); bind(1,new Float32Array(N),3,0);
+    const MAXN=1<<19, seeds=new Float32Array(MAXN);
+    for(let i=0;i<MAXN;i++) seeds[i]=i*0.618;
+    bind(2,seeds,1,1);
+    gl.enable(gl.DEPTH_TEST);
+    // perspective
+    const f=1/Math.tan(0.45), asp=cv.width/cv.height, zn=0.5, zf=80;
+    gl.uniformMatrix4fv(uProj,false,new Float32Array([f/asp,0,0,0, 0,f,0,0, 0,0,(zf+zn)/(zn-zf),-1, 0,0,2*zf*zn/(zn-zf),0]));
+    return true;
+  }
+
+  function loop(t){
+    if(!open) return;
+    if(lastT){
+      frames.push(t-lastT); if(frames.length>150) frames.shift();
+      if(t-uiAt>250){
+        uiAt=t;
+        const avg=frames.reduce((a,b)=>a+b,0)/frames.length;
+        $("labFps").textContent=(1000/avg).toFixed(0);
+        $("labWorst").textContent=Math.max(...frames).toFixed(0);
+        // rolling tok/s over the last 2s
+        const now=performance.now(), cut=now-2000;
+        tokTimes=tokTimes.filter(x=>x>cut);
+        $("labTok").textContent = genLive ? `LLM ${(tokTimes.length/2).toFixed(1)} tok/s`
+          : tokTimes.length ? "LLM finishing…" : "LLM idle";
+      }
+    }
+    lastT=t;
+    const n=1<<(+$("labLoad").value);
+    gl.clearColor(0.04,0.03,0.07,1); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    gl.uniform1f(uTime,t/1000);
+    gl.drawArraysInstanced(gl.TRIANGLES,0,36,n);
+    requestAnimationFrame(loop);
+  }
+
+  function setOpen(v){
+    if(v && !started){ try{ if(!init()) return; }catch(e){ $("labLoadLbl").textContent="WebGL error: "+e.message; return; } started=true; }
+    open=v; $("lab").style.display=v?"":"none";
+    lastT=0; frames=[];
+    if(v){ lblLoad(); requestAnimationFrame(loop); }
+  }
+  function lblLoad(){ $("labLoadLbl").textContent=`render load: ${(1<<(+$("labLoad").value)).toLocaleString()} animated cubes (${(36*(1<<(+$("labLoad").value))/1e6).toFixed(1)}M verts/frame)`; }
+
+  return {
+    toggle(){ setOpen(!open); },
+    close(){ setOpen(false); },
+    lblLoad,
+    noteToken(){ tokTimes.push(performance.now()); },
+    genStart(){ genLive=true; },
+    genEnd(){ genLive=false; }
+  };
+})();
+$("labBtn").addEventListener("click", ()=>LoadLab.toggle());
+$("labClose").addEventListener("click", ()=>LoadLab.close());
+$("labLoad").addEventListener("input", ()=>LoadLab.lblLoad());
+
 /* ---------------- render ---------------- */
 function esc(s){ return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
@@ -910,15 +1044,18 @@ async function weaveOne(profile){
   }
   const streamEl = $("stream");
   streamEl.style.display="block"; streamEl.textContent="⟳ "+cfg.model+" weaving for "+profile.name+" …\n";
+  LoadLab.genStart();
   try{
     const out = await generateLLM(quest, profile, tok=>{
       streamEl.textContent += tok; streamEl.scrollTop = streamEl.scrollHeight;
+      LoadLab.noteToken();
     });
     renderCard(out, profile, "llm", performance.now()-t0);
   }catch(e){
     renderError("Generation failed: "+e.message);
   }finally{
     streamEl.style.display="none";
+    LoadLab.genEnd();
   }
 }
 

@@ -78,6 +78,19 @@ without generative variety.
 Open **"Prompt preview"** in the middle panel to see exactly what is sent to the
 model — useful for explaining the technique.
 
+### GPU Load Lab (⚡ in the header)
+
+Can one GPU render a game *and* run the narrative model? The lab answers it
+empirically: a WebGL stress scene (up to ~500k animated cubes — crank the
+slider until the FPS meter sits at game-like numbers), then weave a quest and
+watch **FPS / worst-frame-ms vs LLM tokens-per-second** compete for the same
+card in real time. Two takeaways it makes visible: VRAM pressure (a resident
+9.6 GB model + game assets can exceed the card and cause paging stutter) and
+compute contention (frame-time spikes while tokens stream). It's also a great
+argument for the pattern real games use: generate during dialogue/menus (low
+render load), keep the model small (`qwen2.5:0.5b`, `gemma4:e2b`), or run the
+LLM on CPU/NPU and leave the GPU to graphics.
+
 ## How it works
 
 - The browser calls Ollama's `/api/chat` directly (`http://localhost:11434`,
