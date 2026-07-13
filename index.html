@@ -76,6 +76,8 @@
   #lab .labStats{display:flex;gap:14px;font-size:12px;color:var(--dim);margin:8px 0 4px}
   #lab .labStats b{color:var(--ink);font-family:var(--mono)}
   #labTok{margin-left:auto;color:#8fd49a;font-family:var(--mono)}
+  #labChart{width:100%;height:118px;display:block;margin:2px 0;cursor:crosshair}
+  #labChartCap{font-size:10.5px;margin-bottom:6px}
   /* quest cards */
   .qcard{background:linear-gradient(180deg,#221a33,#1b1527);border:1px solid var(--gold-dim);
     border-radius:12px;padding:16px 18px;position:relative;animation:rise .35s ease}
@@ -131,6 +133,8 @@
     <span>worst <b id="labWorst">–</b> ms</span>
     <span id="labTok">LLM idle</span>
   </div>
+  <canvas id="labChart" width="296" height="118"></canvas>
+  <div class="small" id="labChartCap"></div>
   <input type="range" id="labLoad" min="10" max="19" value="14" style="width:100%">
   <div class="small" id="labLoadLbl"></div>
   <div class="small" style="margin-top:4px">Raise the load to game-like FPS, then <b>✦ Weave</b> a quest and watch the two compete for the GPU.</div>
@@ -891,6 +895,10 @@ const NpcViewer = (() => {
 const LoadLab = (() => {
   let gl=null, prog=null, uTime=null, uProj=null, uAspect=null, started=false, open=false;
   let frames=[], lastT=0, tokTimes=[], genLive=false, uiAt=0;
+  /* rolling 60s history, sampled at 4 Hz; series colors validated for the dark surface */
+  const HIST_N=240, FPS_COL="#8b6cf0", TOK_COL="#3fae66";
+  let hist=[], hoverI=-1;
+  const CAP_DEFAULT = `<span style="color:${FPS_COL}">▬</span> FPS · <span style="color:${TOK_COL}">▬</span> tok/s · <span style="color:#d4a94e">▮</span> generating — last 60 s, hover to inspect`;
 
   const VS = `#version 300 es
   layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm; layout(location=2) in float aSeed;
@@ -967,6 +975,11 @@ const LoadLab = (() => {
         tokTimes=tokTimes.filter(x=>x>cut);
         $("labTok").textContent = genLive ? `LLM ${(tokTimes.length/2).toFixed(1)} tok/s`
           : tokTimes.length ? "LLM finishing…" : "LLM idle";
+        if(isFinite(avg) && avg>0){
+          hist.push({fps:1000/avg, tok:tokTimes.length/2, gen:genLive});
+          if(hist.length>HIST_N) hist.shift();
+        }
+        drawChart();
       }
     }
     lastT=t;
@@ -977,11 +990,68 @@ const LoadLab = (() => {
     requestAnimationFrame(loop);
   }
 
+  /* two stacked strips on a shared time axis (FPS and tok/s have different
+     scales, so they never share a y-axis); gold bands mark generation windows */
+  function drawChart(){
+    const c=$("labChart"), x=c.getContext("2d"), W=c.width, H=c.height;
+    x.clearRect(0,0,W,H);
+    const n=hist.length;
+    const px=i=> W-1-(n-1-i)*(W/(HIST_N-1));           // newest sample pinned to the right edge
+    // generation bands span both strips
+    x.fillStyle="rgba(212,169,78,.12)";
+    for(let i=0;i<n;i++){
+      if(!hist[i].gen) continue;
+      let j=i; while(j+1<n && hist[j+1].gen) j++;
+      x.fillRect(px(i)-1, 10, Math.max(2, px(j)-px(i)+2), H-14);
+      i=j;
+    }
+    const strips=[
+      {y0:12, y1:56,  key:"fps", col:FPS_COL, lbl:"FPS",   max:Math.max(60, ...hist.map(s=>s.fps)), fmt:v=>v.toFixed(0)},
+      {y0:72, y1:116, key:"tok", col:TOK_COL, lbl:"tok/s", max:Math.max(10, ...hist.map(s=>s.tok)), fmt:v=>v.toFixed(1)}
+    ];
+    x.font="9px system-ui"; x.lineJoin="round";
+    for(const s of strips){
+      const m=Math.ceil(s.max/(s.key==="fps"?30:10))*(s.key==="fps"?30:10);
+      // recessive grid: baseline + midline
+      x.strokeStyle="rgba(255,255,255,.08)"; x.lineWidth=1;
+      x.beginPath(); x.moveTo(0,s.y1+.5); x.lineTo(W,s.y1+.5);
+      x.moveTo(0,(s.y0+s.y1)/2+.5); x.lineTo(W,(s.y0+s.y1)/2+.5); x.stroke();
+      // strip label (ink, not series color) + scale max + current value
+      x.fillStyle="#9a8fb0"; x.textAlign="left";
+      x.fillText(s.lbl, 2, s.y0-3);
+      x.fillText("max "+m, x.measureText(s.lbl).width+10, s.y0-3);
+      if(n){ x.fillStyle="#e8e0f0"; x.textAlign="right"; x.fillText(s.fmt(hist[n-1][s.key]), W-2, s.y0-3); }
+      if(n<2) continue;
+      const py=v=> s.y1-(Math.min(v,m)/m)*(s.y1-s.y0);
+      x.strokeStyle=s.col; x.lineWidth=2;
+      x.beginPath(); x.moveTo(px(0), py(hist[0][s.key]));
+      for(let i=1;i<n;i++) x.lineTo(px(i), py(hist[i][s.key]));
+      x.stroke();
+    }
+    // hover crosshair
+    if(hoverI>=0 && hoverI<n){
+      x.strokeStyle="rgba(255,255,255,.35)"; x.lineWidth=1;
+      x.beginPath(); x.moveTo(px(hoverI)+.5,10); x.lineTo(px(hoverI)+.5,H-2); x.stroke();
+    }
+  }
+
+  function chartHover(e){
+    const c=$("labChart"), r=c.getBoundingClientRect(), n=hist.length;
+    if(!n) return;
+    const cx=(e.clientX-r.left)*(c.width/r.width);
+    hoverI=Math.max(0, Math.min(n-1, Math.round((n-1)-(c.width-1-cx)/(c.width/(HIST_N-1)))));
+    const s=hist[hoverI], ago=((n-1-hoverI)*0.25).toFixed(1);
+    $("labChartCap").innerHTML=`${ago}s ago — <b>${s.fps.toFixed(0)}</b> FPS · <b>${s.tok.toFixed(1)}</b> tok/s${s.gen?" · generating":""}`;
+    drawChart();
+  }
+  $("labChart").addEventListener("pointermove", chartHover);
+  $("labChart").addEventListener("pointerleave", ()=>{ hoverI=-1; $("labChartCap").innerHTML=CAP_DEFAULT; drawChart(); });
+
   function setOpen(v){
     if(v && !started){ try{ if(!init()) return; }catch(e){ $("labLoadLbl").textContent="WebGL error: "+e.message; return; } started=true; }
     open=v; $("lab").style.display=v?"":"none";
     lastT=0; frames=[];
-    if(v){ lblLoad(); requestAnimationFrame(loop); }
+    if(v){ lblLoad(); $("labChartCap").innerHTML=CAP_DEFAULT; requestAnimationFrame(loop); }
   }
   function lblLoad(){ $("labLoadLbl").textContent=`render load: ${(1<<(+$("labLoad").value)).toLocaleString()} animated cubes (${(36*(1<<(+$("labLoad").value))/1e6).toFixed(1)}M verts/frame)`; }
 
