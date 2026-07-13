@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quest Weaver — Dynamic Quest AI Demo</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
+<style>
+  :root{
+    --bg:#100d16; --panel:#1a1523; --panel2:#211a2e; --ink:#e8e0f0; --dim:#9a8fb0;
+    --gold:#d4a94e; --gold-dim:#8a6f34; --accent:#7c5cff; --danger:#e05555; --ok:#4ec97a;
+    --border:#332a45; --mono:ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 'Segoe UI',system-ui,sans-serif;
+    background-image:radial-gradient(ellipse at 20% -10%, #241a3a 0%, transparent 55%),
+                     radial-gradient(ellipse at 90% 110%, #26143a 0%, transparent 50%);}
+  header{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--border);
+    background:rgba(16,13,22,.7);position:sticky;top:0;z-index:10;backdrop-filter:blur(6px);flex-wrap:wrap}
+  header h1{font-size:20px;margin:0;letter-spacing:.5px;color:var(--gold);font-variant:small-caps}
+  header .sub{color:var(--dim);font-size:12px}
+  .spacer{flex:1}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:20px;font-size:12px;
+    border:1px solid var(--border);background:var(--panel)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--danger)}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--gold)}
+  main{display:grid;grid-template-columns:minmax(320px,1fr) minmax(320px,1fr) minmax(380px,1.4fr);gap:16px;
+    padding:16px 22px;max-width:1700px;margin:0 auto}
+  @media(max-width:1100px){main{grid-template-columns:1fr 1fr}.col-out{grid-column:1/-1}}
+  @media(max-width:760px){main{grid-template-columns:1fr}.col-out{grid-column:auto}}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;
+    display:flex;flex-direction:column;min-height:0}
+  .panel>.ph{padding:10px 16px;border-bottom:1px solid var(--border);background:var(--panel2);
+    display:flex;align-items:center;gap:10px}
+  .panel>.ph h2{margin:0;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold)}
+  .panel>.ph .hint{color:var(--dim);font-size:11px}
+  .pb{padding:14px 16px;display:flex;flex-direction:column;gap:12px;overflow:auto}
+  label{display:block;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+  input[type=text],select,textarea{width:100%;background:#141020;border:1px solid var(--border);color:var(--ink);
+    border-radius:8px;padding:8px 10px;font:inherit;outline:none}
+  textarea{resize:vertical;font-size:13px}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+  .row{display:flex;gap:10px}.row>*{flex:1;min-width:0}
+  .repRow{display:grid;grid-template-columns:130px 1fr 92px;align-items:center;gap:10px}
+  .repRow input[type=range]{width:100%;accent-color:var(--accent)}
+  .repVal{font-family:var(--mono);font-size:12px;text-align:right;color:var(--dim);white-space:nowrap}
+  .repVal b{color:var(--ink)}
+  button{background:linear-gradient(180deg,#8c68ff,#6a48e0);color:#fff;border:0;border-radius:8px;
+    padding:9px 16px;font:600 13px/1 inherit;cursor:pointer;letter-spacing:.4px}
+  button:hover{filter:brightness(1.12)} button:disabled{opacity:.45;cursor:not-allowed;filter:none}
+  button.ghost{background:transparent;border:1px solid var(--border);color:var(--dim)}
+  button.ghost:hover{color:var(--ink);border-color:var(--accent)}
+  button.gold{background:linear-gradient(180deg,#e2b95e,#b3873a);color:#241a08}
+  .btnbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .small{font-size:12px;color:var(--dim)}
+  .chip{display:inline-block;background:#2a2140;border:1px solid var(--border);border-radius:14px;
+    padding:2px 10px;font-size:11px;color:var(--dim);margin:2px 3px 2px 0}
+  /* quest cards */
+  .qcard{background:linear-gradient(180deg,#221a33,#1b1527);border:1px solid var(--gold-dim);
+    border-radius:12px;padding:16px 18px;position:relative;animation:rise .35s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+  .qcard h3{margin:0 0 2px;color:var(--gold);font-size:18px;font-variant:small-caps;letter-spacing:.5px}
+  .qcard .meta{font-size:11px;color:var(--dim);margin-bottom:10px}
+  .qcard .npc{border-left:3px solid var(--gold-dim);padding:6px 12px;margin:10px 0;font-style:italic;color:#d9cfa8;
+    background:rgba(212,169,78,.05);border-radius:0 8px 8px 0;white-space:pre-wrap}
+  .qcard .npcName{font-style:normal;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--gold-dim)}
+  .qcard p{margin:8px 0;white-space:pre-wrap}
+  .qcard ul{margin:6px 0;padding-left:20px}
+  .qcard li{margin:3px 0}
+  .qcard .sect{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin-top:12px}
+  .hook{display:flex;gap:8px;margin:4px 0;font-size:13px}
+  .hook .hf{flex:0 0 auto;background:#31255233;border:1px solid #443564;color:#b6a3ee;border-radius:6px;
+    padding:1px 8px;font-size:11px;align-self:flex-start;margin-top:2px;white-space:nowrap}
+  .notes{background:#141020;border:1px dashed var(--border);border-radius:8px;padding:8px 12px;
+    font-size:12px;color:var(--dim);margin-top:12px}
+  .notes b{color:var(--ink)}
+  .tag{position:absolute;top:12px;right:14px;font-size:10px;letter-spacing:1px;padding:2px 8px;border-radius:10px;
+    text-transform:uppercase}
+  .tag.llm{background:#2b6a4433;color:var(--ok);border:1px solid #2b6a44}
+  .tag.mock{background:#6a2b2b33;color:#e08a8a;border:1px solid #6a2b2b}
+  #stream{font-family:var(--mono);font-size:11.5px;color:#8fd49a;background:#0d1410;border:1px solid #1e3324;
+    border-radius:8px;padding:10px;max-height:180px;overflow:auto;white-space:pre-wrap;display:none}
+  .err{background:#3a1a1a;border:1px solid #6a2b2b;color:#f0b0b0;border-radius:8px;padding:10px 14px;font-size:13px}
+  details.adv{border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:var(--panel2)}
+  details.adv summary{cursor:pointer;font-size:12px;color:var(--dim);letter-spacing:.5px}
+  .out-empty{color:var(--dim);text-align:center;padding:50px 20px;font-style:italic}
+  footer{padding:10px 22px 24px;color:var(--dim);font-size:11px;text-align:center}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚔ Quest Weaver</h1>
+  <span class="sub">dynamic quest AI — one curated quest, a unique telling for every player</span>
+  <span class="spacer"></span>
+  <span class="badge"><span class="dot" id="llmDot"></span><span id="llmStatus">checking…</span></span>
+  <select id="modelSel" title="Ollama model" style="width:170px"></select>
+  <button class="ghost" id="cfgBtn" title="LLM settings">⚙</button>
+</header>
+
+<main>
+  <!-- ============ CURATED QUEST ============ -->
+  <section class="panel">
+    <div class="ph"><h2>Curated Quest</h2><span class="hint">what the designer authors — fixed canon</span></div>
+    <div class="pb">
+      <div>
+        <label>Quest working title</label>
+        <input type="text" id="qTitle">
+      </div>
+      <div>
+        <label>Flavor text — the story seed</label>
+        <textarea id="qFlavor" rows="7"></textarea>
+      </div>
+      <div>
+        <label>Quest rules — objectives, canon &amp; constraints (the AI may not break these)</label>
+        <textarea id="qRules" rows="9"></textarea>
+      </div>
+      <div>
+        <label>Reward budget</label>
+        <input type="text" id="qReward">
+      </div>
+      <div class="btnbar">
+        <button class="ghost" id="qReset">↺ Reset example quest</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PLAYER PROFILE ============ -->
+  <section class="panel">
+    <div class="ph"><h2>Player Profile</h2><span class="hint">who is being told the story</span></div>
+    <div class="pb">
+      <div class="row">
+        <div style="flex:1.4">
+          <label>Preset</label>
+          <select id="preset"></select>
+        </div>
+        <div>
+          <label>Name</label>
+          <input type="text" id="pName">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Gender</label>
+          <select id="pGender">
+            <option>female</option><option>male</option><option>nonbinary</option>
+          </select>
+        </div>
+        <div>
+          <label>Race</label>
+          <select id="pRace">
+            <option>human</option><option>elf</option><option>dwarf</option><option>goblin</option>
+            <option>orc</option><option>halfling</option><option>undead</option>
+          </select>
+        </div>
+        <div>
+          <label>Class</label>
+          <select id="pClass">
+            <option>paladin</option><option>rogue</option><option>druid</option><option>warrior</option>
+            <option>mage</option><option>necromancer</option><option>bard</option>
+          </select>
+        </div>
+        <div style="flex:.6">
+          <label>Level</label>
+          <input type="text" id="pLevel" inputmode="numeric">
+        </div>
+      </div>
+
+      <div>
+        <label>Faction reputation <span style="text-transform:none">(−100 hated … +100 revered)</span></label>
+        <div id="repList"></div>
+      </div>
+
+      <div>
+        <label>Notable deeds &amp; history flags</label>
+        <textarea id="pDeeds" rows="3" placeholder="e.g. saved the village of Emberford from wolves; betrayed a merchant caravan"></textarea>
+      </div>
+
+      <div class="btnbar">
+        <button class="gold" id="genBtn">✦ Weave Quest</button>
+        <button class="ghost" id="genAllBtn" title="Generate for every preset to compare how the same quest adapts">Weave for all presets</button>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="mockToggle" style="width:auto"> mock mode (no LLM)
+        </label>
+      </div>
+
+      <details class="adv">
+        <summary>Prompt preview — what gets sent to the model</summary>
+        <pre id="promptPreview" style="font-family:var(--mono);font-size:11px;white-space:pre-wrap;color:var(--dim);max-height:260px;overflow:auto"></pre>
+      </details>
+    </div>
+  </section>
+
+  <!-- ============ OUTPUT ============ -->
+  <section class="panel col-out">
+    <div class="ph">
+      <h2>Woven Quests</h2><span class="hint">same canon, personal telling</span>
+      <span class="spacer"></span>
+      <button class="ghost" id="clearOut">clear</button>
+    </div>
+    <div class="pb" id="outBox">
+      <pre id="stream"></pre>
+      <div class="out-empty" id="outEmpty">Pick a player, then <b>Weave Quest</b>.<br>
+        Try weaving the same quest for the paladin and the goblin rogue — watch the innkeeper change her tune.</div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Demo of AI-assisted curated storytelling: designers author canon once; a local LLM
+  (<span id="ftModel">gemma3:4b</span> via Ollama) performs the telling per player. Nothing leaves your machine.
+</footer>
+
+<!-- settings dialog -->
+<dialog id="cfgDlg" style="background:var(--panel);color:var(--ink);border:1px solid var(--border);border-radius:12px;padding:20px;width:min(420px,90vw)">
+  <h3 style="margin:0 0 12px;color:var(--gold)">LLM settings</h3>
+  <label>Ollama URL</label>
+  <input type="text" id="cfgUrl" style="margin-bottom:10px">
+  <label>Temperature (creativity)</label>
+  <input type="text" id="cfgTemp" style="margin-bottom:14px">
+  <div class="btnbar" style="justify-content:flex-end">
+    <button class="ghost" onclick="cfgDlg.close()">cancel</button>
+    <button id="cfgSave">save &amp; reconnect</button>
+  </div>
+</dialog>
+
+<script>
+/* =====================================================================
+   Quest Weaver — dynamic quest AI demo
+   A curated quest (flavor + rules) is retold per player by a local LLM.
+   ===================================================================== */
+
+const $ = id => document.getElementById(id);
+
+/* ---------------- default curated quest ---------------- */
+const DEFAULT_QUEST = {
+  title: "The Sunken Bell",
+  flavor:
+`The fishing town of Grayharbor has gone quiet. Its great bronze bell — blessed to keep the fog-wraiths at bay — was stolen a week ago and dropped into the flooded crypts beneath the old lighthouse. Each night the fog creeps further up the streets, and each morning another fisher does not wake. Innkeeper Maren Tolch, who rang that bell for thirty years, is quietly organizing help while the town council argues about whose fault it is.`,
+  rules:
+`OBJECTIVES (fixed, in order):
+1. Speak with Maren Tolch at the Driftwood Inn.
+2. Find the crypt entrance beneath the old lighthouse.
+3. Recover the Bronze Bell of Grayharbor from the flooded crypt.
+4. Return the bell to Maren before nightfall.
+
+CANON (may not change):
+- The thief was Maren's own nephew, Edric, who sold the bell's blessing to a smuggler cult. Maren suspects but does not know.
+- The fog-wraiths are real and hostile at night.
+- The crypt is flooded waist-deep; something large moves in the water.
+
+CONSTRAINTS:
+- The AI may adapt tone, dialogue, motivations, greetings and small reward flavor.
+- The AI may NOT add, remove, or reorder objectives, change locations, invent new named NPCs, or exceed the reward budget.
+- Quest must remain completable by any class.`,
+  reward: "60 silver, +10 Grayharbor reputation, and one minor item of flavor value (≤ uncommon)"
+};
+
+/* ---------------- factions & presets ---------------- */
+const FACTIONS = ["The Crown","Merchant Guild","Temple of the Flame","Thieves' Den","Wildfolk Circles"];
+
+const PRESETS = {
+  "Serah Dawnlit — human paladin": {
+    name:"Serah Dawnlit", gender:"female", race:"human", clazz:"paladin", level:"24",
+    rep:{"The Crown":70,"Merchant Guild":25,"Temple of the Flame":90,"Thieves' Den":-60,"Wildfolk Circles":10},
+    deeds:"Hero of Emberford (saved the village from a wraith siege); publicly executed a corrupt tax-collector; sworn oathkeeper of the Temple."
+  },
+  "Grix — goblin rogue": {
+    name:"Grix", gender:"male", race:"goblin", clazz:"rogue", level:"19",
+    rep:{"The Crown":-55,"Merchant Guild":-30,"Temple of the Flame":-10,"Thieves' Den":85,"Wildfolk Circles":0},
+    deeds:"Betrayed a merchant caravan to the Den; escaped the Crown's gibbets twice; secretly paid for an orphanage roof in Grayharbor."
+  },
+  "Maelis Thornweave — elf druid": {
+    name:"Maelis Thornweave", gender:"nonbinary", race:"elf", clazz:"druid", level:"31",
+    rep:{"The Crown":0,"Merchant Guild":-15,"Temple of the Flame":20,"Thieves' Den":-5,"Wildfolk Circles":95},
+    deeds:"Regrew the burned Weald of Anthers; speaks for the Wildfolk at moots; distrusts towns and sleeps outside their walls."
+  },
+  "Borin Cragjaw — dwarf warrior": {
+    name:"Borin Cragjaw", gender:"male", race:"dwarf", clazz:"warrior", level:"12",
+    rep:{"The Crown":20,"Merchant Guild":75,"Temple of the Flame":5,"Thieves' Den":-20,"Wildfolk Circles":-25},
+    deeds:"Guild-bonded caravan guard; haggled a dragon out of a toll (allegedly); newly arrived in Grayharbor looking for paid work."
+  },
+  "Vess — undead necromancer": {
+    name:"Vess", gender:"female", race:"undead", clazz:"necromancer", level:"40",
+    rep:{"The Crown":-80,"Merchant Guild":10,"Temple of the Flame":-95,"Thieves' Den":30,"Wildfolk Circles":-40},
+    deeds:"Walked out of her own grave during the Plague Years; keeps her dead polite and her bargains exact; the Temple has burned her twice, unsuccessfully."
+  }
+};
+
+/* ---------------- state ---------------- */
+const cfg = {
+  url: localStorage.getItem("qw.url") || "http://localhost:11434",
+  model: localStorage.getItem("qw.model") || "gemma3:4b",
+  temp: parseFloat(localStorage.getItem("qw.temp") || "0.8"),
+};
+let llmUp = false, busy = false;
+
+/* ---------------- ui build ---------------- */
+function buildRepRows(){
+  $("repList").innerHTML = FACTIONS.map(f=>{
+    const id = "rep_"+f.replace(/\W/g,"");
+    return `<div class="repRow">
+      <span class="small">${f}</span>
+      <input type="range" min="-100" max="100" value="0" id="${id}" data-f="${f}">
+      <span class="repVal" id="${id}_v"><b>0</b> · neutral</span>
+    </div>`;
+  }).join("");
+  FACTIONS.forEach(f=>{
+    const el = $("rep_"+f.replace(/\W/g,""));
+    el.addEventListener("input", ()=>updateRepVal(el));
+  });
+}
+function repTier(v){
+  v=+v;
+  if(v>=75) return "revered"; if(v>=40) return "trusted"; if(v>=15) return "friendly";
+  if(v>-15) return "neutral"; if(v>-40) return "wary"; if(v>-75) return "disliked";
+  return "hated";
+}
+function updateRepVal(el){
+  $(el.id+"_v").innerHTML = `<b>${el.value}</b> · ${repTier(el.value)}`;
+}
+function setRep(rep){
+  FACTIONS.forEach(f=>{
+    const el = $("rep_"+f.replace(/\W/g,""));
+    el.value = rep[f] ?? 0; updateRepVal(el);
+  });
+}
+function getProfile(){
+  const rep={};
+  FACTIONS.forEach(f=>{ rep[f] = +$("rep_"+f.replace(/\W/g,"")).value; });
+  return {
+    name:$("pName").value.trim()||"Adventurer", gender:$("pGender").value, race:$("pRace").value,
+    clazz:$("pClass").value, level:$("pLevel").value.trim()||"1", rep, deeds:$("pDeeds").value.trim()
+  };
+}
+function getQuest(){
+  return { title:$("qTitle").value.trim(), flavor:$("qFlavor").value.trim(),
+           rules:$("qRules").value.trim(), reward:$("qReward").value.trim() };
+}
+function loadQuest(q){
+  $("qTitle").value=q.title; $("qFlavor").value=q.flavor; $("qRules").value=q.rules; $("qReward").value=q.reward;
+}
+function loadPreset(key){
+  const p = PRESETS[key]; if(!p) return;
+  $("pName").value=p.name; $("pGender").value=p.gender; $("pRace").value=p.race;
+  $("pClass").value=p.clazz; $("pLevel").value=p.level; $("pDeeds").value=p.deeds;
+  setRep(p.rep);
+  refreshPromptPreview();
+}
+
+/* ---------------- prompt construction ---------------- */
+const OUTPUT_SCHEMA = {
+  type:"object",
+  properties:{
+    quest_title:{type:"string", description:"personalized quest title, evocative, <= 8 words"},
+    npc_name:{type:"string"},
+    npc_greeting:{type:"string", description:"the quest-giver's opening dialogue to THIS player, 2-4 sentences, in-voice"},
+    quest_pitch:{type:"string", description:"the personalized quest narration, 2-3 short paragraphs"},
+    objectives:{type:"array", items:{type:"string"}, description:"the fixed objectives, restated with personal flavor but same order/meaning"},
+    personalized_hooks:{type:"array", items:{
+      type:"object", properties:{factor:{type:"string"},effect:{type:"string"}},
+      required:["factor","effect"]
+    }, description:"which profile factors changed the telling and how"},
+    reward_offer:{type:"string", description:"the reward, phrased for this player, within budget"},
+    farewell:{type:"string", description:"NPC's parting line"},
+    designer_notes:{type:"string", description:"1-2 sentences to the game designer explaining the personalization choices"}
+  },
+  required:["quest_title","npc_name","npc_greeting","quest_pitch","objectives",
+            "personalized_hooks","reward_offer","farewell","designer_notes"]
+};
+
+function systemPrompt(){
+  return `You are Quest Weaver, an AI narrative assistant embedded in an MMO. Game designers hand you a CURATED QUEST (flavor text + rules). Your job is to personalize how that quest is TOLD to one specific player — never to change what the quest IS.
+
+Hard rules:
+- Objectives, locations, named NPCs, canon facts and reward budget are FIXED. Never alter, reorder, add or remove them.
+- Personalize everything else: the quest-giver's attitude and greeting (driven by faction reputation and the player's history), the motivations offered, tone, word choice, gendered address and pronouns, race/class-aware details, and reward phrasing within budget.
+- Reputation drives NPC attitude: revered/trusted players are welcomed warmly and trusted with more candor; hated/wary players are met with suspicion, bargaining, or fear — but the quest must still be offered (find an in-fiction reason).
+- The player's class should color HOW tasks are pitched (a rogue is asked to slip in quietly, a paladin to bring the light back), without changing the tasks.
+- Reference at most 1-2 specific past deeds if provided. Keep it grounded and diegetic; no meta-talk about being an AI.
+- Keep total output tight: this is game dialog, not a novel.
+Respond ONLY with JSON matching the schema you were given.`;
+}
+
+function userPrompt(quest, p){
+  const repLines = FACTIONS.map(f=>`  - ${f}: ${p.rep[f]} (${repTier(p.rep[f])})`).join("\n");
+  return `CURATED QUEST
+=============
+Working title: ${quest.title}
+
+Flavor text:
+${quest.flavor}
+
+Rules:
+${quest.rules}
+
+Reward budget: ${quest.reward}
+
+PLAYER PROFILE
+==============
+Name: ${p.name}
+Gender: ${p.gender}
+Race: ${p.race}
+Class: ${p.clazz}
+Level: ${p.level}
+Faction reputation (-100 hated … +100 revered):
+${repLines}
+Notable deeds / history: ${p.deeds || "(none recorded)"}
+
+Weave this quest for this player.`;
+}
+
+function refreshPromptPreview(){
+  try{
+    $("promptPreview").textContent =
+      "── system ──\n" + systemPrompt() + "\n\n── user ──\n" + userPrompt(getQuest(), getProfile());
+  }catch(e){}
+}
+
+/* ---------------- ollama plumbing ---------------- */
+async function checkLLM(){
+  const dot=$("llmDot"), st=$("llmStatus");
+  try{
+    const r = await fetch(cfg.url+"/api/tags", {signal:AbortSignal.timeout(3000)});
+    const data = await r.json();
+    const models = (data.models||[]).map(m=>m.name);
+    const sel=$("modelSel");
+    sel.innerHTML = models.map(m=>`<option${m===cfg.model||m===cfg.model+":latest"?" selected":""}>${m}</option>`).join("")
+                 || `<option>${cfg.model}</option>`;
+    if(models.length && !models.some(m=>m===cfg.model||m===cfg.model+":latest")) sel.selectedIndex=0;
+    cfg.model = sel.value;
+    $("ftModel").textContent = cfg.model;
+    llmUp = true; dot.className="dot ok"; st.textContent="Ollama connected";
+    if(!models.length){ dot.className="dot warn"; st.textContent="Ollama up — no models pulled"; }
+  }catch(e){
+    llmUp = false; dot.className="dot"; st.textContent="Ollama offline — mock mode";
+    $("modelSel").innerHTML=`<option>${cfg.model}</option>`;
+  }
+}
+
+async function generateLLM(quest, profile, onToken){
+  const body = {
+    model: cfg.model,
+    stream: true,
+    format: OUTPUT_SCHEMA,
+    options: { temperature: cfg.temp },
+    messages: [
+      {role:"system", content: systemPrompt()},
+      {role:"user",   content: userPrompt(quest, profile)}
+    ]
+  };
+  const res = await fetch(cfg.url+"/api/chat", {
+    method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
+  });
+  if(!res.ok) throw new Error("Ollama HTTP "+res.status+" — "+(await res.text()).slice(0,300));
+  const reader = res.body.getReader(); const dec = new TextDecoder();
+  let full="", buf="";
+  for(;;){
+    const {done, value} = await reader.read(); if(done) break;
+    buf += dec.decode(value, {stream:true});
+    let nl;
+    while((nl = buf.indexOf("\n")) >= 0){
+      const line = buf.slice(0,nl).trim(); buf = buf.slice(nl+1);
+      if(!line) continue;
+      try{
+        const j = JSON.parse(line);
+        if(j.message?.content){ full += j.message.content; onToken(j.message.content); }
+        if(j.error) throw new Error(j.error);
+      }catch(e){ if(e.message && !e.message.startsWith("Unexpected")) throw e; }
+    }
+  }
+  return JSON.parse(full);
+}
+
+/* ---------------- mock generator (no-LLM fallback) ---------------- */
+function generateMock(quest, p){
+  // deterministic template weaving so the demo UI works with zero setup
+  const dislikes = FACTIONS.filter(f=>p.rep[f]<=-40), likes = FACTIONS.filter(f=>p.rep[f]>=40);
+  const temple = p.rep["Temple of the Flame"], den = p.rep["Thieves' Den"];
+  const warm = temple>=40 || p.rep["The Crown"]>=40;
+  const shady = den>=40;
+  const feared = p.race==="undead" || p.rep["The Crown"]<=-60;
+  const honorific = p.gender==="female" ? "milady" : p.gender==="male" ? "milord" : "friend";
+
+  const greeting =
+    feared ? `Maren's hand stops halfway to the door-bolt. "…I know what folk say about you, ${p.name}. Right now I care more about what the fog says. Come in before someone sees — and keep your ${p.clazz==="necromancer"?"quiet dead":"blades"} outside my taproom."`
+    : warm ? `"${p.name}! By the Flame, they said a ${p.race} ${p.clazz} of your standing had come ashore — I hardly dared hope. Sit, ${honorific}. Grayharbor needs exactly what you are."`
+    : shady ? `Maren slides a mug over without being asked. "I don't ask the Den's people their business. But you lot can get into places the council can't even find on a map, and that's worth more than my opinions tonight."`
+    : `"You're new to Grayharbor, ${honorific}. Bad week for it. But you have the look of someone who finishes things, and I am clean out of townsfolk who do."`;
+
+  const pitchClass = {
+    rogue:"She needs someone who can slip through a flooded crypt without waking whatever coils in the dark water.",
+    paladin:"She needs someone who can carry light into a drowned and unhallowed place — and carry the bell's blessing back out.",
+    druid:"She needs someone the water and the dark won't treat as an intruder; the crypt is older than the town and remembers wilder rules.",
+    warrior:"She needs a strong back and a stronger nerve — the bell is bronze, heavy, and something below considers it theirs now.",
+    mage:"She needs someone who can read the old lighthouse's wards and unpick the crypt's flooded dark by wit instead of luck.",
+    necromancer:"She needs someone the drowned dead below will parley with instead of drown — and she is desperate enough not to ask how.",
+    bard:"She needs someone who can charm a frightened town by day and face a drowned crypt by night — and live to make it a song."
+  }[p.clazz];
+
+  const deed = p.deeds ? p.deeds.split(";")[0].trim() : "";
+
+  return {
+    quest_title: warm ? "Bearer of the Bell" : feared ? "A Bargain in the Fog" : shady ? "The Bell Job" : "The Sunken Bell",
+    npc_name: "Maren Tolch",
+    npc_greeting: greeting,
+    quest_pitch:
+`The fog took another fisher this morning, and Grayharbor's council still argues about blame while the streets empty at dusk. Maren Tolch rang the bronze bell for thirty years; she knows its silence is what lets the fog-wraiths walk. ${pitchClass}
+
+${deed ? `She has heard the stories — "${deed}" — and it is why she is asking you and no one else. `:""}The bell lies in the flooded crypt beneath the old lighthouse. Bring it back before nightfall, and Grayharbor wakes tomorrow.`,
+    objectives:[
+      "Speak with Maren Tolch at the Driftwood Inn.",
+      "Find the crypt entrance beneath the old lighthouse.",
+      "Recover the Bronze Bell of Grayharbor from the flooded crypt.",
+      "Return the bell to Maren before nightfall."
+    ],
+    personalized_hooks:[
+      {factor:"reputation", effect: feared ? "Maren is afraid of the player, so she bargains behind a bolted door rather than welcoming them." :
+        warm ? "High Temple/Crown standing earns a hero's welcome and open trust." :
+        shady ? "Thieves' Den standing reframes the ask as a discreet 'job' — no questions asked." :
+        "Unknown newcomer: Maren is polite but transactional."},
+      {factor:"class", effect:`The pitch emphasizes a ${p.clazz}'s approach to the flooded crypt.`},
+      {factor:"gender/address", effect:`Maren addresses the player as "${honorific}".`},
+      ...(deed ? [{factor:"deeds", effect:`References the player's history: "${deed}".`}] : []),
+      ...(dislikes.length ? [{factor:"low reputation", effect:`Wary undertone due to standing with ${dislikes.join(", ")}.`}] : []),
+      ...(likes.length && !warm && !shady ? [{factor:"reputation", effect:`Softened by good standing with ${likes.join(", ")}.`}] : [])
+    ],
+    reward_offer: feared ? "Sixty silver in a sealed pouch, left on the step — and Maren's silence about your visit, which in Grayharbor is worth more. (+10 Grayharbor reputation)"
+      : shady ? "Sixty silver, no ledger entry, and a word in the right ears at the docks. She'll throw in a bottle of the good smuggler's rum. (+10 Grayharbor reputation)"
+      : "Sixty silver from the bell fund, the town's open gratitude (+10 Grayharbor reputation), and Maren's late husband's storm-lantern — it has never once gone out in fog.",
+    farewell: feared ? `"Bring back the bell, ${p.name}. Do that, and Grayharbor will remember the deed and not the rumors."`
+      : `"The fog comes at dusk, ${honorific}. Please — be back before it does."`,
+    designer_notes:"MOCK OUTPUT (no LLM): deterministic template keyed off reputation tiers, class, race, gender and first-listed deed. Run Ollama for genuinely generative weaving."
+  };
+}
+
+/* ---------------- render ---------------- */
+function esc(s){ return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function renderCard(q, profile, source, ms){
+  $("outEmpty").style.display="none";
+  const card = document.createElement("div");
+  card.className="qcard";
+  card.innerHTML = `
+    <span class="tag ${source==="mock"?"mock":"llm"}">${source==="mock"?"mock":esc(cfg.model)}</span>
+    <h3>${esc(q.quest_title)}</h3>
+    <div class="meta">for <b>${esc(profile.name)}</b> — level ${esc(profile.level)} ${esc(profile.gender)} ${esc(profile.race)} ${esc(profile.clazz)}${ms?` · ${(ms/1000).toFixed(1)}s`:""}</div>
+    <div class="npc"><div class="npcName">${esc(q.npc_name)}</div>${esc(q.npc_greeting)}</div>
+    <p>${esc(q.quest_pitch)}</p>
+    <div class="sect">Objectives</div>
+    <ul>${(q.objectives||[]).map(o=>`<li>${esc(o)}</li>`).join("")}</ul>
+    <div class="sect">Reward</div>
+    <p>${esc(q.reward_offer)}</p>
+    <div class="npc"><div class="npcName">${esc(q.npc_name)} — parting</div>${esc(q.farewell)}</div>
+    <div class="sect">Why it changed for this player</div>
+    ${(q.personalized_hooks||[]).map(h=>`<div class="hook"><span class="hf">${esc(h.factor)}</span><span>${esc(h.effect)}</span></div>`).join("")}
+    <div class="notes"><b>Designer notes:</b> ${esc(q.designer_notes)}</div>`;
+  $("outBox").insertBefore(card, $("outBox").children[1]); // below stream console
+}
+
+function renderError(msg){
+  $("outEmpty").style.display="none";
+  const d=document.createElement("div"); d.className="err";
+  d.innerHTML = esc(msg) + `<br><span class="small">Is Ollama running? Try <code>ollama serve</code> and <code>ollama pull gemma3:4b</code>, or tick <b>mock mode</b>.</span>`;
+  $("outBox").insertBefore(d, $("outBox").children[1]);
+}
+
+/* ---------------- actions ---------------- */
+async function weaveOne(profile){
+  const quest = getQuest();
+  const useMock = $("mockToggle").checked || !llmUp;
+  const t0 = performance.now();
+  if(useMock){
+    renderCard(generateMock(quest, profile), profile, "mock", 0);
+    return;
+  }
+  const streamEl = $("stream");
+  streamEl.style.display="block"; streamEl.textContent="⟳ "+cfg.model+" weaving for "+profile.name+" …\n";
+  try{
+    const out = await generateLLM(quest, profile, tok=>{
+      streamEl.textContent += tok; streamEl.scrollTop = streamEl.scrollHeight;
+    });
+    renderCard(out, profile, "llm", performance.now()-t0);
+  }catch(e){
+    renderError("Generation failed: "+e.message);
+  }finally{
+    streamEl.style.display="none";
+  }
+}
+
+async function withBusy(fn){
+  if(busy) return; busy=true;
+  $("genBtn").disabled = $("genAllBtn").disabled = true;
+  try{ await fn(); } finally{
+    busy=false; $("genBtn").disabled = $("genAllBtn").disabled = false;
+  }
+}
+
+/* ---------------- wire up ---------------- */
+buildRepRows();
+loadQuest(DEFAULT_QUEST);
+$("preset").innerHTML = Object.keys(PRESETS).map(k=>`<option>${k}</option>`).join("");
+loadPreset(Object.keys(PRESETS)[0]);
+
+$("preset").addEventListener("change", e=>loadPreset(e.target.value));
+$("qReset").addEventListener("click", ()=>{ loadQuest(DEFAULT_QUEST); refreshPromptPreview(); });
+$("clearOut").addEventListener("click", ()=>{
+  [...$("outBox").querySelectorAll(".qcard,.err")].forEach(n=>n.remove());
+  $("outEmpty").style.display="";
+});
+$("genBtn").addEventListener("click", ()=>withBusy(()=>weaveOne(getProfile())));
+$("genAllBtn").addEventListener("click", ()=>withBusy(async ()=>{
+  for(const key of Object.keys(PRESETS)){
+    loadPreset(key);
+    await weaveOne(getProfile());
+  }
+}));
+$("modelSel").addEventListener("change", e=>{
+  cfg.model = e.target.value; localStorage.setItem("qw.model", cfg.model);
+  $("ftModel").textContent = cfg.model;
+});
+document.querySelectorAll("input,textarea,select").forEach(el=>
+  el.addEventListener("input", refreshPromptPreview));
+
+/* settings dialog */
+$("cfgBtn").addEventListener("click", ()=>{
+  $("cfgUrl").value = cfg.url; $("cfgTemp").value = cfg.temp; cfgDlg.showModal();
+});
+$("cfgSave").addEventListener("click", ()=>{
+  cfg.url = $("cfgUrl").value.trim().replace(/\/$/,"") || "http://localhost:11434";
+  cfg.temp = Math.min(2, Math.max(0, parseFloat($("cfgTemp").value)||0.8));
+  localStorage.setItem("qw.url", cfg.url); localStorage.setItem("qw.temp", cfg.temp);
+  cfgDlg.close(); checkLLM();
+});
+
+refreshPromptPreview();
+checkLLM();
+setInterval(checkLLM, 15000);
+</script>
+</body>
+</html>
