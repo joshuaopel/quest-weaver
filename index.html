@@ -108,7 +108,8 @@
   <span class="sub">dynamic quest AI — one curated quest, a unique telling for every player</span>
   <span class="spacer"></span>
   <span class="badge"><span class="dot" id="llmDot"></span><span id="llmStatus">checking…</span></span>
-  <select id="modelSel" title="Ollama model" style="width:170px"></select>
+  <select id="modelSel" title="Ollama model" style="width:230px"></select>
+  <button class="ghost" id="pullBtn" style="display:none" title="Download the selected model via Ollama">⬇ pull</button>
   <button class="ghost" id="cfgBtn" title="LLM settings">⚙</button>
 </header>
 
@@ -251,8 +252,8 @@
   <h3 style="margin:0 0 12px;color:var(--gold)">LLM settings</h3>
   <label>Ollama URL</label>
   <input type="text" id="cfgUrl" style="margin-bottom:10px">
-  <label>Temperature (creativity)</label>
-  <input type="text" id="cfgTemp" style="margin-bottom:14px">
+  <label>Temperature (blank = auto per model: Gemma 1.0 / Qwen 0.7)</label>
+  <input type="text" id="cfgTemp" placeholder="auto" style="margin-bottom:14px">
   <div class="btnbar" style="justify-content:flex-end">
     <button class="ghost" onclick="cfgDlg.close()">cancel</button>
     <button id="cfgSave">save &amp; reconnect</button>
@@ -341,7 +342,8 @@ const PRESETS = {
 const cfg = {
   url: localStorage.getItem("qw.url") || "http://localhost:11434",
   model: localStorage.getItem("qw.model") || "gemma4:e4b",
-  temp: parseFloat(localStorage.getItem("qw.temp") || "1.0"),
+  // "" = auto: use the selected model family's recommended temperature
+  temp: (()=>{ const t=localStorage.getItem("qw.temp"); const n=parseFloat(t); return (t===null||t===""||isNaN(n)) ? "" : n; })(),
 };
 let llmUp = false, busy = false;
 
@@ -498,23 +500,92 @@ function refreshPromptPreview(){
 }
 
 /* ---------------- ollama plumbing ---------------- */
+/* curated head-to-head roster: Gemma vs Qwen (anything else you've pulled shows below) */
+const RECOMMENDED = [
+  {tag:"gemma4:e4b",   label:"Gemma 4 e4b — default (9.6 GB)"},
+  {tag:"gemma4:e2b",   label:"Gemma 4 e2b — small (7.2 GB)"},
+  {tag:"qwen2.5:0.5b", label:"Qwen 2.5 0.5b — lowest VRAM (0.4 GB)"},
+  {tag:"qwen2.5:3b",   label:"Qwen 2.5 3b — balanced (1.9 GB)"}
+];
+let installedModels = [], pulling = false;
+
+function isInstalled(tag){ return installedModels.some(m=>m===tag||m===tag+":latest"); }
+
+/* each family generates best with its vendor-recommended sampling */
+function samplingFor(model){
+  const qwen = /qwen/i.test(model);
+  const t = cfg.temp==="" ? (qwen?0.7:1.0) : cfg.temp;
+  return qwen ? {temperature:t, top_p:0.8, top_k:20} : {temperature:t, top_p:0.95, top_k:64};
+}
+
+function rebuildModelSel(){
+  const sel=$("modelSel");
+  const extras = installedModels.filter(m=>!RECOMMENDED.some(r=>m===r.tag||m===r.tag+":latest"));
+  sel.innerHTML =
+    '<optgroup label="Gemma vs Qwen">'+
+      RECOMMENDED.map(r=>`<option value="${r.tag}">${isInstalled(r.tag)?"✓":"⬇"} ${r.label}</option>`).join("")+
+    '</optgroup>'+
+    (extras.length ? '<optgroup label="Other installed">'+
+      extras.map(m=>`<option value="${m}">✓ ${m}</option>`).join("")+'</optgroup>' : "");
+  if([...sel.options].some(o=>o.value===cfg.model)) sel.value=cfg.model;
+  else { sel.selectedIndex=0; cfg.model=sel.value; }
+  $("ftModel").textContent = cfg.model;
+  updatePullBtn();
+}
+function updatePullBtn(){
+  $("pullBtn").style.display = (llmUp && !pulling && !isInstalled(cfg.model)) ? "" : "none";
+}
+
 async function checkLLM(){
+  if(pulling) return;
   const dot=$("llmDot"), st=$("llmStatus");
   try{
     const r = await fetch(cfg.url+"/api/tags", {signal:AbortSignal.timeout(3000)});
     const data = await r.json();
-    const models = (data.models||[]).map(m=>m.name);
-    const sel=$("modelSel");
-    sel.innerHTML = models.map(m=>`<option${m===cfg.model||m===cfg.model+":latest"?" selected":""}>${m}</option>`).join("")
-                 || `<option>${cfg.model}</option>`;
-    if(models.length && !models.some(m=>m===cfg.model||m===cfg.model+":latest")) sel.selectedIndex=0;
-    cfg.model = sel.value;
-    $("ftModel").textContent = cfg.model;
-    llmUp = true; dot.className="dot ok"; st.textContent="Ollama connected";
-    if(!models.length){ dot.className="dot warn"; st.textContent="Ollama up — no models pulled"; }
+    installedModels = (data.models||[]).map(m=>m.name);
+    llmUp = true;
+    rebuildModelSel();
+    if(isInstalled(cfg.model)){ dot.className="dot ok"; st.textContent="Ollama connected"; }
+    else { dot.className="dot warn"; st.textContent="model not pulled — click ⬇ pull"; }
   }catch(e){
-    llmUp = false; dot.className="dot"; st.textContent="Ollama offline — mock mode";
-    $("modelSel").innerHTML=`<option>${cfg.model}</option>`;
+    llmUp = false; installedModels = [];
+    dot.className="dot"; st.textContent="Ollama offline — mock mode";
+    rebuildModelSel();
+  }
+}
+
+async function pullModel(tag){
+  if(pulling || busy) return;
+  pulling = true; $("pullBtn").disabled = true;
+  const dot=$("llmDot"), st=$("llmStatus");
+  dot.className="dot warn";
+  try{
+    const res = await fetch(cfg.url+"/api/pull", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({model: tag, stream: true})
+    });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf="";
+    for(;;){
+      const {done, value} = await reader.read(); if(done) break;
+      buf += dec.decode(value, {stream:true});
+      let nl;
+      while((nl = buf.indexOf("\n")) >= 0){
+        const line = buf.slice(0,nl).trim(); buf = buf.slice(nl+1);
+        if(!line) continue;
+        const j = JSON.parse(line);
+        if(j.error) throw new Error(j.error);
+        st.textContent = j.total ? `pulling ${tag} — ${Math.round(j.completed/j.total*100)||0}%`
+                                 : `pulling ${tag} — ${j.status||"…"}`;
+      }
+    }
+    st.textContent = "pull complete";
+  }catch(e){
+    st.textContent = "pull failed: "+String(e.message).slice(0,60);
+  }finally{
+    pulling = false; $("pullBtn").disabled = false;
+    await checkLLM();
   }
 }
 
@@ -523,7 +594,7 @@ async function generateLLM(quest, profile, onToken){
     model: cfg.model,
     stream: true,
     format: OUTPUT_SCHEMA,
-    options: { temperature: cfg.temp, top_p: 0.95, top_k: 64 },
+    options: samplingFor(cfg.model),
     messages: [
       {role:"system", content: systemPrompt()},
       {role:"user",   content: userPrompt(quest, profile)}
@@ -833,6 +904,10 @@ async function weaveOne(profile){
     renderCard(generateMock(quest, profile), profile, "mock", 0);
     return;
   }
+  if(!isInstalled(cfg.model)){
+    renderError(`Model "${cfg.model}" is not pulled yet — click the ⬇ pull button in the header (or run: ollama pull ${cfg.model}).`);
+    return;
+  }
   const streamEl = $("stream");
   streamEl.style.display="block"; streamEl.textContent="⟳ "+cfg.model+" weaving for "+profile.name+" …\n";
   try{
@@ -878,7 +953,12 @@ $("genAllBtn").addEventListener("click", ()=>withBusy(async ()=>{
 $("modelSel").addEventListener("change", e=>{
   cfg.model = e.target.value; localStorage.setItem("qw.model", cfg.model);
   $("ftModel").textContent = cfg.model;
+  updatePullBtn();
+  $("llmStatus").textContent = !llmUp ? "Ollama offline — mock mode"
+    : isInstalled(cfg.model) ? "Ollama connected" : "model not pulled — click ⬇ pull";
+  $("llmDot").className = !llmUp ? "dot" : isInstalled(cfg.model) ? "dot ok" : "dot warn";
 });
+$("pullBtn").addEventListener("click", ()=>pullModel(cfg.model));
 document.querySelectorAll("input,textarea,select").forEach(el=>
   el.addEventListener("input", refreshPromptPreview));
 
@@ -888,7 +968,8 @@ $("cfgBtn").addEventListener("click", ()=>{
 });
 $("cfgSave").addEventListener("click", ()=>{
   cfg.url = $("cfgUrl").value.trim().replace(/\/$/,"") || "http://localhost:11434";
-  cfg.temp = Math.min(2, Math.max(0, parseFloat($("cfgTemp").value)||1.0));
+  const t = parseFloat($("cfgTemp").value);
+  cfg.temp = isNaN(t) ? "" : Math.min(2, Math.max(0, t));
   localStorage.setItem("qw.url", cfg.url); localStorage.setItem("qw.temp", cfg.temp);
   cfgDlg.close(); checkLLM();
 });

@@ -33,9 +33,15 @@ short note to the designer.
    ```bash
    ollama pull gemma4:e4b
    ```
-   (Any pulled model works — the header dropdown lists whatever you have.
-   `gemma4:e2b` is faster on weak hardware; `gemma4:12b` writes noticeably
-   better if you have the RAM; `gemma3:4b` still works fine too.)
+   Prefer something tiny? **Qwen 2.5 0.5B** runs in under 1 GB of VRAM:
+   ```bash
+   ollama pull qwen2.5:0.5b
+   ```
+   The header selector offers a curated **Gemma vs Qwen** roster (plus anything
+   else you've pulled); models you don't have yet show a ⬇ mark and a one-click
+   **pull** button that downloads them with live progress. Each family
+   automatically gets its vendor-recommended sampling (Gemma: temp 1.0 /
+   top-p 0.95; Qwen: temp 0.7 / top-p 0.8).
 3. **Serve the tool** (any static server; needed so the browser can call Ollama):
    ```bash
    python3 -m http.server 8080
