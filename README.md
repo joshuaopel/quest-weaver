@@ -16,6 +16,7 @@ Nothing leaves your machine: the model runs locally via [Ollama](https://ollama.
 |---|---|
 | Objectives & their order | NPC attitude & greeting (reputation-driven) |
 | Locations & named NPCs | Motivation & how tasks are pitched (class/race) |
+| Quest giver's core personality | The quest giver's *attitude* toward this player |
 | Canon facts & twists | Gendered address & pronouns |
 | Reward *budget* | Reward *phrasing* within budget |
 | Completability rules | Tone, callbacks to the player's history |
@@ -27,12 +28,14 @@ short note to the designer.
 ## Quickstart
 
 1. **Install Ollama** — <https://ollama.com/download>
-2. **Pull a lightweight model** (Gemma 3 4B is the sweet spot for this demo):
+2. **Pull a lightweight model** (Gemma 4 E4B is the sweet spot for this demo —
+   ~4.5B effective params, built for on-device use):
    ```bash
-   ollama pull gemma3:4b
+   ollama pull gemma4:e4b
    ```
    (Any pulled model works — the header dropdown lists whatever you have.
-   `gemma3:1b` is faster on weak hardware; `gemma3:12b` writes noticeably better.)
+   `gemma4:e2b` is faster on weak hardware; `gemma4:12b` writes noticeably
+   better if you have the RAM; `gemma3:4b` still works fine too.)
 3. **Serve the tool** (any static server; needed so the browser can call Ollama):
    ```bash
    python3 -m http.server 8080
@@ -52,11 +55,14 @@ without generative variety.
 
 ## Using the demo
 
-1. Left panel — the **curated quest**. A complete example ("The Sunken Bell")
-   ships in; edit anything or write your own.
+1. Left panel — the **curated quest**: flavor text, the quest giver's name and
+   **authored personality** (the voice the AI must stay in), rules, and reward
+   budget. A complete example ("The Sunken Bell") ships in; edit anything or
+   write your own.
 2. Middle panel — the **player profile**. Five presets included, from a revered
    human paladin to a feared undead necromancer. Reputation sliders cover five
-   factions from −100 (hated) to +100 (revered).
+   factions from −100 (hated) to +100 (revered); **clickable history/trait tags**
+   ("dragonslayer", "ex-convict", "cursed", …) toggle facts the model weaves in.
 3. **✦ Weave Quest** generates the personalized quest. Cards stack in the right
    panel so you can compare tellings side by side.
 4. **Weave for all presets** runs the same quest through every preset in one go —
@@ -85,8 +91,8 @@ model — useful for explaining the technique.
   ```bash
   OLLAMA_ORIGINS="*" ollama serve
   ```
-- **Slow generation** — a 4B model on CPU takes a while for its first response
-  (model load). Subsequent generations are much faster; or use `gemma3:1b`.
+- **Slow generation** — a small model on CPU takes a while for its first response
+  (model load). Subsequent generations are much faster; or use `gemma4:e2b`.
 - **Malformed output** — raise/lower temperature in ⚙ settings, or try a larger
   model. The JSON schema constraint makes this rare.
 

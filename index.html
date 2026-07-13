@@ -55,6 +55,10 @@
   .small{font-size:12px;color:var(--dim)}
   .chip{display:inline-block;background:#2a2140;border:1px solid var(--border);border-radius:14px;
     padding:2px 10px;font-size:11px;color:var(--dim);margin:2px 3px 2px 0}
+  #tagCloud .chip{cursor:pointer;user-select:none;padding:4px 12px;transition:all .12s}
+  #tagCloud .chip:hover{border-color:var(--accent);color:var(--ink)}
+  #tagCloud .chip.on{background:#3b2a6b;border-color:var(--accent);color:#d9ccff;box-shadow:0 0 6px #7c5cff44}
+  #tagCloud .chip.on::before{content:"✓ ";color:var(--accent)}
   /* quest cards */
   .qcard{background:linear-gradient(180deg,#221a33,#1b1527);border:1px solid var(--gold-dim);
     border-radius:12px;padding:16px 18px;position:relative;animation:rise .35s ease}
@@ -111,6 +115,16 @@
       <div>
         <label>Flavor text — the story seed</label>
         <textarea id="qFlavor" rows="7"></textarea>
+      </div>
+      <div class="row">
+        <div>
+          <label>Quest giver (NPC) name</label>
+          <input type="text" id="qNpcName">
+        </div>
+      </div>
+      <div>
+        <label>NPC personality — voice the AI must stay in</label>
+        <textarea id="qNpcPersona" rows="4" placeholder="e.g. gruff old smith; short sentences; hides kindness behind complaints; hates being thanked"></textarea>
       </div>
       <div>
         <label>Quest rules — objectives, canon &amp; constraints (the AI may not break these)</label>
@@ -173,7 +187,12 @@
       </div>
 
       <div>
-        <label>Notable deeds &amp; history flags</label>
+        <label>History &amp; trait tags <span style="text-transform:none">(click to toggle — these are sent to the model)</span></label>
+        <div id="tagCloud"></div>
+      </div>
+
+      <div>
+        <label>Notable deeds &amp; history (free text)</label>
         <textarea id="pDeeds" rows="3" placeholder="e.g. saved the village of Emberford from wolves; betrayed a merchant caravan"></textarea>
       </div>
 
@@ -209,7 +228,7 @@
 
 <footer>
   Demo of AI-assisted curated storytelling: designers author canon once; a local LLM
-  (<span id="ftModel">gemma3:4b</span> via Ollama) performs the telling per player. Nothing leaves your machine.
+  (<span id="ftModel">gemma4:e4b</span> via Ollama) performs the telling per player. Nothing leaves your machine.
 </footer>
 
 <!-- settings dialog -->
@@ -238,6 +257,9 @@ const DEFAULT_QUEST = {
   title: "The Sunken Bell",
   flavor:
 `The fishing town of Grayharbor has gone quiet. Its great bronze bell — blessed to keep the fog-wraiths at bay — was stolen a week ago and dropped into the flooded crypts beneath the old lighthouse. Each night the fog creeps further up the streets, and each morning another fisher does not wake. Innkeeper Maren Tolch, who rang that bell for thirty years, is quietly organizing help while the town council argues about whose fault it is.`,
+  npcName: "Maren Tolch",
+  npcPersona:
+`Weathered innkeeper, late fifties. Brisk and practical; grief hidden under a dry wit. Fiercely protective of Grayharbor and its people. Distrusts the town council. Never begs — she recruits. Superstitious about the fog: won't name the wraiths aloud after dark.`,
   rules:
 `OBJECTIVES (fixed, in order):
 1. Speak with Maren Tolch at the Driftwood Inn.
@@ -257,33 +279,45 @@ CONSTRAINTS:
   reward: "60 silver, +10 Grayharbor reputation, and one minor item of flavor value (≤ uncommon)"
 };
 
-/* ---------------- factions & presets ---------------- */
+/* ---------------- factions, tags & presets ---------------- */
 const FACTIONS = ["The Crown","Merchant Guild","Temple of the Flame","Thieves' Den","Wildfolk Circles"];
+
+const TAGS = [
+  "hero of a village","dragonslayer","war veteran","famous duelist","renowned healer",
+  "noble-born","orphan-raised","penniless","wealthy patron","guild betrayer",
+  "ex-convict","notorious smuggler","oathbreaker","kinslayer","cursed",
+  "pious devotee","beast-friend","haunted by the sea","walking dead","silver-tongued"
+];
 
 const PRESETS = {
   "Serah Dawnlit — human paladin": {
     name:"Serah Dawnlit", gender:"female", race:"human", clazz:"paladin", level:"24",
     rep:{"The Crown":70,"Merchant Guild":25,"Temple of the Flame":90,"Thieves' Den":-60,"Wildfolk Circles":10},
+    tags:["hero of a village","pious devotee","war veteran"],
     deeds:"Hero of Emberford (saved the village from a wraith siege); publicly executed a corrupt tax-collector; sworn oathkeeper of the Temple."
   },
   "Grix — goblin rogue": {
     name:"Grix", gender:"male", race:"goblin", clazz:"rogue", level:"19",
     rep:{"The Crown":-55,"Merchant Guild":-30,"Temple of the Flame":-10,"Thieves' Den":85,"Wildfolk Circles":0},
+    tags:["guild betrayer","ex-convict","notorious smuggler"],
     deeds:"Betrayed a merchant caravan to the Den; escaped the Crown's gibbets twice; secretly paid for an orphanage roof in Grayharbor."
   },
   "Maelis Thornweave — elf druid": {
     name:"Maelis Thornweave", gender:"nonbinary", race:"elf", clazz:"druid", level:"31",
     rep:{"The Crown":0,"Merchant Guild":-15,"Temple of the Flame":20,"Thieves' Den":-5,"Wildfolk Circles":95},
+    tags:["beast-friend","renowned healer"],
     deeds:"Regrew the burned Weald of Anthers; speaks for the Wildfolk at moots; distrusts towns and sleeps outside their walls."
   },
   "Borin Cragjaw — dwarf warrior": {
     name:"Borin Cragjaw", gender:"male", race:"dwarf", clazz:"warrior", level:"12",
     rep:{"The Crown":20,"Merchant Guild":75,"Temple of the Flame":5,"Thieves' Den":-20,"Wildfolk Circles":-25},
+    tags:["wealthy patron","silver-tongued"],
     deeds:"Guild-bonded caravan guard; haggled a dragon out of a toll (allegedly); newly arrived in Grayharbor looking for paid work."
   },
   "Vess — undead necromancer": {
     name:"Vess", gender:"female", race:"undead", clazz:"necromancer", level:"40",
     rep:{"The Crown":-80,"Merchant Guild":10,"Temple of the Flame":-95,"Thieves' Den":30,"Wildfolk Circles":-40},
+    tags:["walking dead","cursed","oathbreaker"],
     deeds:"Walked out of her own grave during the Plague Years; keeps her dead polite and her bargains exact; the Temple has burned her twice, unsuccessfully."
   }
 };
@@ -291,8 +325,8 @@ const PRESETS = {
 /* ---------------- state ---------------- */
 const cfg = {
   url: localStorage.getItem("qw.url") || "http://localhost:11434",
-  model: localStorage.getItem("qw.model") || "gemma3:4b",
-  temp: parseFloat(localStorage.getItem("qw.temp") || "0.8"),
+  model: localStorage.getItem("qw.model") || "gemma4:e4b",
+  temp: parseFloat(localStorage.getItem("qw.temp") || "1.0"),
 };
 let llmUp = false, busy = false;
 
@@ -331,21 +365,44 @@ function getProfile(){
   FACTIONS.forEach(f=>{ rep[f] = +$("rep_"+f.replace(/\W/g,"")).value; });
   return {
     name:$("pName").value.trim()||"Adventurer", gender:$("pGender").value, race:$("pRace").value,
-    clazz:$("pClass").value, level:$("pLevel").value.trim()||"1", rep, deeds:$("pDeeds").value.trim()
+    clazz:$("pClass").value, level:$("pLevel").value.trim()||"1", rep,
+    tags:getTags(), deeds:$("pDeeds").value.trim()
   };
 }
 function getQuest(){
   return { title:$("qTitle").value.trim(), flavor:$("qFlavor").value.trim(),
+           npcName:$("qNpcName").value.trim()||"the quest giver", npcPersona:$("qNpcPersona").value.trim(),
            rules:$("qRules").value.trim(), reward:$("qReward").value.trim() };
 }
 function loadQuest(q){
-  $("qTitle").value=q.title; $("qFlavor").value=q.flavor; $("qRules").value=q.rules; $("qReward").value=q.reward;
+  $("qTitle").value=q.title; $("qFlavor").value=q.flavor;
+  $("qNpcName").value=q.npcName||""; $("qNpcPersona").value=q.npcPersona||"";
+  $("qRules").value=q.rules; $("qReward").value=q.reward;
 }
+
+/* clickable trait tags */
+function buildTagCloud(){
+  $("tagCloud").innerHTML = TAGS.map(t=>`<span class="chip" data-tag="${t}">${t}</span>`).join("");
+  $("tagCloud").addEventListener("click", e=>{
+    const chip = e.target.closest(".chip"); if(!chip) return;
+    chip.classList.toggle("on");
+    refreshPromptPreview();
+  });
+}
+function getTags(){
+  return [...document.querySelectorAll("#tagCloud .chip.on")].map(c=>c.dataset.tag);
+}
+function setTags(tags){
+  document.querySelectorAll("#tagCloud .chip").forEach(c=>
+    c.classList.toggle("on", (tags||[]).includes(c.dataset.tag)));
+}
+
 function loadPreset(key){
   const p = PRESETS[key]; if(!p) return;
   $("pName").value=p.name; $("pGender").value=p.gender; $("pRace").value=p.race;
   $("pClass").value=p.clazz; $("pLevel").value=p.level; $("pDeeds").value=p.deeds;
   setRep(p.rep);
+  setTags(p.tags);
   refreshPromptPreview();
 }
 
@@ -375,6 +432,7 @@ function systemPrompt(){
 
 Hard rules:
 - Objectives, locations, named NPCs, canon facts and reward budget are FIXED. Never alter, reorder, add or remove them.
+- The quest giver's AUTHORED PERSONALITY is fixed canon: every line of their dialogue must stay in that voice. Reputation and player history change their ATTITUDE toward this player (warmth, suspicion, fear, respect) — never who they are.
 - Personalize everything else: the quest-giver's attitude and greeting (driven by faction reputation and the player's history), the motivations offered, tone, word choice, gendered address and pronouns, race/class-aware details, and reward phrasing within budget.
 - Reputation drives NPC attitude: revered/trusted players are welcomed warmly and trusted with more candor; hated/wary players are met with suspicion, bargaining, or fear — but the quest must still be offered (find an in-fiction reason).
 - The player's class should color HOW tasks are pitched (a rogue is asked to slip in quietly, a paladin to bring the light back), without changing the tasks.
@@ -392,6 +450,10 @@ Working title: ${quest.title}
 Flavor text:
 ${quest.flavor}
 
+Quest giver: ${quest.npcName}
+Quest giver personality (stay in this voice):
+${quest.npcPersona || "(designer left this blank — infer a fitting voice from the flavor text)"}
+
 Rules:
 ${quest.rules}
 
@@ -406,6 +468,7 @@ Class: ${p.clazz}
 Level: ${p.level}
 Faction reputation (-100 hated … +100 revered):
 ${repLines}
+History & trait tags: ${p.tags.length ? p.tags.join(", ") : "(none)"}
 Notable deeds / history: ${p.deeds || "(none recorded)"}
 
 Weave this quest for this player.`;
@@ -444,7 +507,7 @@ async function generateLLM(quest, profile, onToken){
     model: cfg.model,
     stream: true,
     format: OUTPUT_SCHEMA,
-    options: { temperature: cfg.temp },
+    options: { temperature: cfg.temp, top_p: 0.95, top_k: 64 },
     messages: [
       {role:"system", content: systemPrompt()},
       {role:"user",   content: userPrompt(quest, profile)}
@@ -476,6 +539,8 @@ async function generateLLM(quest, profile, onToken){
 /* ---------------- mock generator (no-LLM fallback) ---------------- */
 function generateMock(quest, p){
   // deterministic template weaving so the demo UI works with zero setup
+  const npc = quest.npcName || "Maren Tolch";
+  const npcFirst = npc.split(" ")[0];
   const dislikes = FACTIONS.filter(f=>p.rep[f]<=-40), likes = FACTIONS.filter(f=>p.rep[f]>=40);
   const temple = p.rep["Temple of the Flame"], den = p.rep["Thieves' Den"];
   const warm = temple>=40 || p.rep["The Crown"]>=40;
@@ -484,9 +549,9 @@ function generateMock(quest, p){
   const honorific = p.gender==="female" ? "milady" : p.gender==="male" ? "milord" : "friend";
 
   const greeting =
-    feared ? `Maren's hand stops halfway to the door-bolt. "…I know what folk say about you, ${p.name}. Right now I care more about what the fog says. Come in before someone sees — and keep your ${p.clazz==="necromancer"?"quiet dead":"blades"} outside my taproom."`
+    feared ? `${npcFirst}'s hand stops halfway to the door-bolt. "…I know what folk say about you, ${p.name}. Right now I care more about what the fog says. Come in before someone sees — and keep your ${p.clazz==="necromancer"?"quiet dead":"blades"} outside my taproom."`
     : warm ? `"${p.name}! By the Flame, they said a ${p.race} ${p.clazz} of your standing had come ashore — I hardly dared hope. Sit, ${honorific}. Grayharbor needs exactly what you are."`
-    : shady ? `Maren slides a mug over without being asked. "I don't ask the Den's people their business. But you lot can get into places the council can't even find on a map, and that's worth more than my opinions tonight."`
+    : shady ? `${npcFirst} slides a mug over without being asked. "I don't ask the Den's people their business. But you lot can get into places the council can't even find on a map, and that's worth more than my opinions tonight."`
     : `"You're new to Grayharbor, ${honorific}. Bad week for it. But you have the look of someone who finishes things, and I am clean out of townsfolk who do."`;
 
   const pitchClass = {
@@ -503,10 +568,10 @@ function generateMock(quest, p){
 
   return {
     quest_title: warm ? "Bearer of the Bell" : feared ? "A Bargain in the Fog" : shady ? "The Bell Job" : "The Sunken Bell",
-    npc_name: "Maren Tolch",
+    npc_name: npc,
     npc_greeting: greeting,
     quest_pitch:
-`The fog took another fisher this morning, and Grayharbor's council still argues about blame while the streets empty at dusk. Maren Tolch rang the bronze bell for thirty years; she knows its silence is what lets the fog-wraiths walk. ${pitchClass}
+`The fog took another fisher this morning, and Grayharbor's council still argues about blame while the streets empty at dusk. ${npc} is the one still doing something about it. ${pitchClass}
 
 ${deed ? `She has heard the stories — "${deed}" — and it is why she is asking you and no one else. `:""}The bell lies in the flooded crypt beneath the old lighthouse. Bring it back before nightfall, and Grayharbor wakes tomorrow.`,
     objectives:[
@@ -521,14 +586,15 @@ ${deed ? `She has heard the stories — "${deed}" — and it is why she is askin
         shady ? "Thieves' Den standing reframes the ask as a discreet 'job' — no questions asked." :
         "Unknown newcomer: Maren is polite but transactional."},
       {factor:"class", effect:`The pitch emphasizes a ${p.clazz}'s approach to the flooded crypt.`},
-      {factor:"gender/address", effect:`Maren addresses the player as "${honorific}".`},
+      {factor:"gender/address", effect:`${npcFirst} addresses the player as "${honorific}".`},
       ...(deed ? [{factor:"deeds", effect:`References the player's history: "${deed}".`}] : []),
+      ...(p.tags.length ? [{factor:"trait tags", effect:`Weighted by tags: ${p.tags.join(", ")}.`}] : []),
       ...(dislikes.length ? [{factor:"low reputation", effect:`Wary undertone due to standing with ${dislikes.join(", ")}.`}] : []),
       ...(likes.length && !warm && !shady ? [{factor:"reputation", effect:`Softened by good standing with ${likes.join(", ")}.`}] : [])
     ],
-    reward_offer: feared ? "Sixty silver in a sealed pouch, left on the step — and Maren's silence about your visit, which in Grayharbor is worth more. (+10 Grayharbor reputation)"
+    reward_offer: feared ? "Sixty silver in a sealed pouch, left on the step — and ${npcFirst}'s silence about your visit, which in Grayharbor is worth more. (+10 Grayharbor reputation)"
       : shady ? "Sixty silver, no ledger entry, and a word in the right ears at the docks. She'll throw in a bottle of the good smuggler's rum. (+10 Grayharbor reputation)"
-      : "Sixty silver from the bell fund, the town's open gratitude (+10 Grayharbor reputation), and Maren's late husband's storm-lantern — it has never once gone out in fog.",
+      : "Sixty silver from the bell fund, the town's open gratitude (+10 Grayharbor reputation), and ${npcFirst}'s late husband's storm-lantern — it has never once gone out in fog.",
     farewell: feared ? `"Bring back the bell, ${p.name}. Do that, and Grayharbor will remember the deed and not the rumors."`
       : `"The fog comes at dusk, ${honorific}. Please — be back before it does."`,
     designer_notes:"MOCK OUTPUT (no LLM): deterministic template keyed off reputation tiers, class, race, gender and first-listed deed. Run Ollama for genuinely generative weaving."
@@ -599,6 +665,7 @@ async function withBusy(fn){
 
 /* ---------------- wire up ---------------- */
 buildRepRows();
+buildTagCloud();
 loadQuest(DEFAULT_QUEST);
 $("preset").innerHTML = Object.keys(PRESETS).map(k=>`<option>${k}</option>`).join("");
 loadPreset(Object.keys(PRESETS)[0]);
@@ -629,7 +696,7 @@ $("cfgBtn").addEventListener("click", ()=>{
 });
 $("cfgSave").addEventListener("click", ()=>{
   cfg.url = $("cfgUrl").value.trim().replace(/\/$/,"") || "http://localhost:11434";
-  cfg.temp = Math.min(2, Math.max(0, parseFloat($("cfgTemp").value)||0.8));
+  cfg.temp = Math.min(2, Math.max(0, parseFloat($("cfgTemp").value)||1.0));
   localStorage.setItem("qw.url", cfg.url); localStorage.setItem("qw.temp", cfg.temp);
   cfgDlg.close(); checkLLM();
 });
