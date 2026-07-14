@@ -115,6 +115,16 @@ LLM on CPU/NPU and leave the GPU to graphics.
 - **Malformed output** — raise/lower temperature in ⚙ settings, or try a larger
   model. The JSON schema constraint makes this rare.
 
+## Unity plugin
+
+The same system, in-engine: **[unity/QuestWeaver](unity/QuestWeaver/)** is a
+drop-in Unity plugin (2021.3+, zero packages) with a one-component demo scene —
+capsule player, WASD, **E** to talk to a capsule NPC whose quest dialogue is
+generated live by Gemma/Qwen. It implements the full latency playbook
+(proximity prefetch, model warm-up, streaming typewriter, dialogue-only capped
+output, KV-cache-friendly prompts, profile-hash caching) so the player never
+watches a spinner. See its README for details.
+
 ## Why this matters for game design
 
 Hand-written quests are static: every paladin and every necromancer reads the
