@@ -67,17 +67,31 @@ def add_bytes(tar, name, data):
     info = tarfile.TarInfo(name)
     info.size = len(data)
     info.mtime = int(time.time())
+    info.mode = 0o644
+    info.uname = info.gname = ""
     tar.addfile(info, io.BytesIO(data))
 
 
+def add_dir(tar, name):
+    info = tarfile.TarInfo(name)
+    info.type = tarfile.DIRTYPE
+    info.mode = 0o755
+    info.mtime = int(time.time())
+    info.uname = info.gname = ""
+    tar.addfile(info)
+
+
 def add_asset(tar, project_path, file_path=None):
+    # mirror the layout of packages Unity itself exports:
+    # ./<guid>/ (dir), ./<guid>/pathname, ./<guid>/asset.meta, ./<guid>/asset
     is_dir = file_path is None
     g = guid_for(project_path)
-    add_bytes(tar, f"{g}/pathname", (project_path + "\n").encode())
-    add_bytes(tar, f"{g}/asset.meta", meta_for(project_path, is_dir).encode())
+    add_dir(tar, f"./{g}/")
+    add_bytes(tar, f"./{g}/pathname", project_path.encode())
+    add_bytes(tar, f"./{g}/asset.meta", meta_for(project_path, is_dir).encode())
     if not is_dir:
         with open(file_path, "rb") as f:
-            add_bytes(tar, f"{g}/asset", f.read())
+            add_bytes(tar, f"./{g}/asset", f.read())
 
 
 def main():
@@ -93,7 +107,8 @@ def main():
                 continue
             entries.append((f"{base}/{f}", os.path.join(root, f)))
 
-    with tarfile.open(OUT, "w:gz") as tar:
+    with tarfile.open(OUT, "w:gz", format=tarfile.GNU_FORMAT) as tar:
+        add_dir(tar, "./")
         for project_path, file_path in entries:
             add_asset(tar, project_path, file_path)
 
