@@ -17,12 +17,29 @@ NPC says.
    ```
 3. **Demo scene:** create an empty scene, add an empty GameObject, add the
    `QuestWeaverDemo` component, press **Play**. You get a ground plane, a blue
-   capsule (you — WASD to move) and a gold capsule with a "!" (the NPC).
-   Walk up, press **E**, read.
+   capsule (you — WASD to move) and **three quest-giver capsules** with name
+   tags and "!" markers. Walk up to any of them, press **E**, read.
 
 Pick the model on the `QuestWeaverDemo` inspector (`qwen2.5:0.5b` default —
 snappiest for a demo). Edit the **Player Profile** fields in the inspector and
 re-enter Play mode to hear the same quest told differently.
+
+## Multiple NPCs
+
+The demo spawns **three NPCs out of the box**, each with their own story,
+personality, and quest: Maren Tolch (innkeeper, *The Sunken Bell*), Torvald
+Emberhand (blacksmith, *Iron for the Watch*), and Whisper (dockside fence,
+*The Harbormaster's Ledger*). The `Npcs` list on `QuestWeaverDemo` is plain
+inspector data — edit the entries or press **+** to add a fourth, fifth,
+twentieth: name, personality, story, task, position, capsule color. Each
+becomes a talkable capsule with a name tag, its own prefetch trigger, and its
+own dialogue cache. Walking between them shows the same player greeted three
+completely different ways.
+
+Note on concurrency: if several NPCs' prefetch radii overlap, Ollama queues the
+generations (typically fine — the second one still finishes long before the
+player finds their E key). Space quest givers ~15 m apart or shrink
+`prefetchRadius` if you pack them tighter.
 
 ## Using it in your own scene
 
