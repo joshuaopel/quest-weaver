@@ -17,16 +17,18 @@ NPC says.
    The package is rebuilt from source with `python3 unity/build_unitypackage.py`.
 2. Make sure Ollama is running and a model is pulled:
    ```
-   ollama pull qwen2.5:0.5b     (fastest, ~0.4 GB)
-   ollama pull gemma4:e4b       (best prose, ~9.6 GB)
+   ollama pull gemma4:e4b       (best prose, 9.6 GB — the default)
+   ollama pull gemma4:e2b       (good, 7.2 GB)
+   ollama pull qwen2.5:3b       (light, 1.9 GB)
    ```
+   Set the **Model** field on `QuestWeaverDemo` to whichever you pulled.
 3. **Demo scene:** create an empty scene, add an empty GameObject, add the
    `QuestWeaverDemo` component, press **Play**. You get a ground plane, a blue
    capsule (you — WASD to move) and **three quest-giver capsules** with name
    tags and "!" markers. Walk up to any of them, press **E**, read.
 
-Pick the model on the `QuestWeaverDemo` inspector (`qwen2.5:0.5b` default —
-snappiest for a demo).
+Pick the model on the `QuestWeaverDemo` inspector (`gemma4:e4b` default — the
+prefetch design keeps even the big model feeling instant).
 
 ## Authoring inputs (all in the inspector)
 

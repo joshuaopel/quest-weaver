@@ -38,9 +38,9 @@ short note to the designer.
    ```bash
    ollama pull gemma4:e4b
    ```
-   Prefer something tiny? **Qwen 2.5 0.5B** runs in under 1 GB of VRAM:
+   Lighter machine? **Qwen 2.5 3B** is a solid small option:
    ```bash
-   ollama pull qwen2.5:0.5b
+   ollama pull qwen2.5:3b
    ```
    The header selector offers a curated **Gemma vs Qwen** roster (plus anything
    else you've pulled); models you don't have yet show a ⬇ mark and a one-click
@@ -95,7 +95,7 @@ card in real time. Two takeaways it makes visible: VRAM pressure (a resident
 9.6 GB model + game assets can exceed the card and cause paging stutter) and
 compute contention (frame-time spikes while tokens stream). It's also a great
 argument for the pattern real games use: generate during dialogue/menus (low
-render load), keep the model small (`qwen2.5:0.5b`, `gemma4:e2b`), or run the
+render load), keep the model small (`qwen2.5:3b`, `gemma4:e2b`), or run the
 LLM on CPU/NPU and leave the GPU to graphics.
 
 ## How it works
