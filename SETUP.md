@@ -18,7 +18,8 @@ and 1–10 GB free disk depending on which model you pick.
    It will:
    - install **Ollama** (the free app that runs AI models locally) if you
      don't have it,
-   - download the small test model (**Qwen 2.5 0.5B**, ~0.4 GB),
+   - ask which model you want — **Gemma 4 e4b** (best writing, 9.6 GB) is the
+     default; pick the smaller options only if your PC or disk is tight,
    - open Quest Weaver in your browser.
 3. When the badge in the top-right corner turns **green ("Ollama connected")**:
    pick a player preset, click **✦ Weave Quest**, and watch the innkeeper greet
@@ -52,9 +53,10 @@ Open Command Prompt (Win+R → `cmd` → Enter) and run **one** of these:
 
 | Command | Size | Needs | Quality |
 |---|---|---|---|
-| `ollama pull qwen2.5:0.5b` | 0.4 GB | any PC | fine for testing — start here |
+| `ollama pull gemma4:e4b` | 9.6 GB | ~10 GB VRAM/RAM | **best — pick this if you can** |
 | `ollama pull gemma4:e2b` | 7.2 GB | ~6 GB VRAM/RAM | good |
-| `ollama pull gemma4:e4b` | 9.6 GB | ~10 GB VRAM/RAM | best prose |
+| `ollama pull qwen2.5:3b` | 1.9 GB | any modern PC | decent, light |
+| `ollama pull qwen2.5:0.5b` | 0.4 GB | anything | weak prose — pipeline testing only |
 
 You'll see a progress bar; when it says `success` you're done. (You can also
 skip this step — Quest Weaver has a **⬇ pull** button in its header that

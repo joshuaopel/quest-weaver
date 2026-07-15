@@ -1,6 +1,6 @@
 @echo off
 :: Quest Weaver — one-click tester setup.
-:: Installs Ollama if missing, downloads the small test model, opens the tool.
+:: Installs Ollama if missing, lets you pick a model, opens the tool.
 setlocal
 
 echo ============================================
@@ -32,9 +32,18 @@ if errorlevel 1 (
 echo Ollama: OK
 echo.
 
-:: ---- 2. Pull the small test model (skips instantly if already present) ----
-echo Downloading the test model qwen2.5:0.5b (~0.4 GB, one time)...
-"%OLLAMA_EXE%" pull qwen2.5:0.5b
+:: ---- 2. Pick and pull a model (skips download instantly if already present) ----
+echo Which AI model should I download?
+echo.
+echo   [1] Gemma 4 e4b  - BEST writing   (9.6 GB download, ~10 GB RAM or a gaming GPU)
+echo   [2] Gemma 4 e2b  - good writing   (7.2 GB download, mid-range PCs)
+echo   [3] Qwen 2.5 3b  - light ^& fast   (1.9 GB download, weak PCs / small SSDs)
+echo.
+choice /c 123 /n /t 60 /d 1 /m "Press 1, 2 or 3 (picks 1 automatically in 60s): "
+if errorlevel 3 ( set "MODEL=qwen2.5:3b" ) else if errorlevel 2 ( set "MODEL=gemma4:e2b" ) else ( set "MODEL=gemma4:e4b" )
+echo.
+echo Downloading %MODEL% (one time - grab a coffee if you picked Gemma)...
+"%OLLAMA_EXE%" pull %MODEL%
 if errorlevel 1 (
   echo.
   echo Model download failed. Check your internet connection and run this
@@ -43,9 +52,8 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo Model: OK
-echo Tip: for much better writing (9.6 GB download, needs ~10 GB VRAM/RAM):
-echo    ollama pull gemma4:e4b
+echo Model: OK  (%MODEL%)
+echo You can grab more models later with the download button inside the tool.
 echo.
 
 :: ---- 3. Launch the tool ----
