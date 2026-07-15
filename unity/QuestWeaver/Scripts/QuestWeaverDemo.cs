@@ -12,8 +12,8 @@ namespace QuestWeaver
 {
     public class QuestWeaverDemo : MonoBehaviour
     {
-        [Tooltip("Model tag — qwen2.5:0.5b (fastest) or gemma4:e4b (best prose)")]
-        public string model = "qwen2.5:0.5b";
+        [Tooltip("Model tag — gemma4:e4b (best prose), gemma4:e2b (good), qwen2.5:3b (light)")]
+        public string model = "gemma4:e4b";
         public string ollamaUrl = "http://localhost:11434";
 
         [Header("Player — narrative identity (edit freely)")]
