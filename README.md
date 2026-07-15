@@ -48,7 +48,9 @@ short note to the designer.
    # then open http://localhost:8080
    ```
    Opening `index.html` directly by double-click usually works too — Ollama
-   allows `file://` origins by default.
+   allows `file://` origins by default. On Windows, just double-click
+   **`run.bat`** — it starts Ollama if needed, serves on port 9999, and opens
+   the browser.
 
 No build step, no npm, no dependencies — `index.html` is the whole app.
 
