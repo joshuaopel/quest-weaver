@@ -119,8 +119,8 @@ LLM on CPU/NPU and leave the GPU to graphics.
 
 ## Unity plugin
 
-The same system, in-engine: **[unity/QuestWeaver](unity/QuestWeaver/)** is a
-drop-in Unity plugin (2021.3+, zero packages) with a one-component demo scene —
+The same system, in-engine: import **[unity/QuestWeaver.unitypackage](unity/QuestWeaver.unitypackage)**
+(double-click, or Assets → Import Package) — a drop-in Unity plugin (2021.3+, zero packages) with a one-component demo scene —
 capsule player, WASD, **E** to talk to a capsule NPC whose quest dialogue is
 generated live by Gemma/Qwen. It implements the full latency playbook
 (proximity prefetch, model warm-up, streaming typewriter, dialogue-only capped

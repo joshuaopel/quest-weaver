@@ -5,11 +5,16 @@ via Ollama) speaks the quest to *your* character — personalized by race, class
 gender, reputation, and deeds. Dialogue only: no notes, no lists, just what the
 NPC says.
 
-## Install (2 minutes)
+## Install (1 minute)
 
-1. Copy the `QuestWeaver` folder into your project's `Assets/`.
+1. **Easiest:** double-click `unity/QuestWeaver.unitypackage` (or in Unity:
+   Assets → Import Package → Custom Package…) and click Import — everything
+   lands organized under `Assets/QuestWeaver/`. Re-importing a newer package
+   updates the same files in place (GUIDs are stable).
+   *Alternative:* copy the `QuestWeaver` folder into `Assets/` by hand.
    Requires Unity **2021.3+** (built-in render pipeline or URP; uses only
    UnityEngine + UnityWebRequest + legacy UI — no packages).
+   The package is rebuilt from source with `python3 unity/build_unitypackage.py`.
 2. Make sure Ollama is running and a model is pulled:
    ```
    ollama pull qwen2.5:0.5b     (fastest, ~0.4 GB)
