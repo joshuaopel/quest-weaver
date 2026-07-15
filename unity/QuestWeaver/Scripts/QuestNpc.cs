@@ -1,9 +1,11 @@
 // Quest Weaver — the quest-giving NPC.
-// Latency design: generation starts when the player enters the prefetch radius
-// (walk-up time hides first-token latency); pressing E opens the dialogue UI,
-// which follows the stream with a typewriter. Finished lines are cached per
-// player-profile hash, so talking again is instant until the profile changes.
+// Identity (name + personality) lives on the NPC; the quest (lore + rules) is
+// a QuestDefinition asset. Latency design: the model is warmed at load and
+// EVERY NPC prefetches its line as soon as the model is ready (prefetchOnStart),
+// so by the time the player walks anywhere, words are already cached. Entering
+// the trigger radius re-prefetches if the player's profile changed.
 
+using System.Collections;
 using System.Text;
 using UnityEngine;
 
@@ -12,10 +14,18 @@ namespace QuestWeaver
     [RequireComponent(typeof(SphereCollider))]
     public class QuestNpc : MonoBehaviour
     {
-        public QuestDefinition quest;
-        public OllamaClient ollama;
+        [Header("Who this NPC is")]
+        public string npcName = "Quest Giver";
+        [TextArea(2, 6)] public string personality = "Plain-spoken and busy.";
 
-        [Tooltip("Start generating when the player is this close (meters)")]
+        [Header("What they hand out")]
+        public QuestDefinition quest;
+
+        [Header("Wiring")]
+        public OllamaClient ollama;
+        [Tooltip("Generate this NPC's line as soon as the model is warm (hot for all NPCs)")]
+        public bool prefetchOnStart = true;
+        [Tooltip("Also (re)generate when the player comes this close (meters)")]
         public float prefetchRadius = 10f;
         [Tooltip("E works when the player is this close (meters)")]
         public float interactRadius = 3f;
@@ -34,6 +44,8 @@ namespace QuestWeaver
         QuestPlayer playerInRange;
         Coroutine job;
 
+        public string SystemPrompt() { return QuestPrompt.System(npcName, personality, quest); }
+
         void Reset() { GetComponent<SphereCollider>().isTrigger = true; }
 
         void Awake()
@@ -43,12 +55,35 @@ namespace QuestWeaver
             col.radius = prefetchRadius;
         }
 
+        void Start()
+        {
+            if (prefetchOnStart) StartCoroutine(PrefetchWhenWarm());
+        }
+
+        IEnumerator PrefetchWhenWarm()
+        {
+            float deadline = Time.time + 30f;             // don't wait forever on a dead server
+            while (ollama != null && !ollama.IsWarm && Time.time < deadline)
+                yield return null;
+            var qp = FindPlayer();
+            if (qp != null && ollama != null) Prefetch(qp.profile);
+        }
+
+        static QuestPlayer FindPlayer()
+        {
+#if UNITY_2023_1_OR_NEWER
+            return Object.FindFirstObjectByType<QuestPlayer>();
+#else
+            return Object.FindObjectOfType<QuestPlayer>();
+#endif
+        }
+
         void OnTriggerEnter(Collider other)
         {
             var qp = other.GetComponentInParent<QuestPlayer>();
             if (qp == null) return;
             playerInRange = qp;
-            Prefetch(qp.profile);              // the whole trick: start early
+            Prefetch(qp.profile);          // no-op if already cached for this profile
         }
 
         void OnTriggerExit(Collider other)
@@ -81,7 +116,7 @@ namespace QuestWeaver
             CurrentState = State.Generating;
 
             job = ollama.Chat(
-                QuestPrompt.System(quest), QuestPrompt.User(profile),
+                SystemPrompt(), QuestPrompt.User(profile),
                 delta => textBuf.Append(delta),
                 (full, err) =>
                 {

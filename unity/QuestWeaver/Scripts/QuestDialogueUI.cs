@@ -30,7 +30,7 @@ namespace QuestWeaver
                 activeNpc = near;
                 revealed = 0f;
                 panel.SetActive(true);
-                nameText.text = near.quest != null ? near.quest.npcName : near.name;
+                nameText.text = near.npcName;
             }
 
             if (activeNpc == null) return;

@@ -26,8 +26,47 @@ NPC says.
    tags and "!" markers. Walk up to any of them, press **E**, read.
 
 Pick the model on the `QuestWeaverDemo` inspector (`qwen2.5:0.5b` default —
-snappiest for a demo). Edit the **Player Profile** fields in the inspector and
-re-enter Play mode to hear the same quest told differently.
+snappiest for a demo).
+
+## Authoring inputs (all in the inspector)
+
+- **Player** (`Player Profile` on QuestWeaverDemo, or `QuestPlayer` in your own
+  scene): name, gender, race, class, level, **bio**, **deeds**, **feats**,
+  **affiliations** — free text, same factors as the webtool.
+- **Each NPC** (entries in the `Npcs` list, or `QuestNpc` components): **name**
+  and **personality** (the voice the model must stay in).
+- **Each quest** (same entry / `QuestDefinition` asset): **lore** (story,
+  stakes, task, reward) and **rules** — hard constraints the generated line
+  must stick to ("reward is exactly 60 silver — never more", "never reveal who
+  stole the bell").
+
+When the player walks up and presses **E**, the NPC delivers exactly one thing:
+a greeting by name plus the quest details. Two short paragraphs, ≤ 90 words,
+dialogue only — no notes, no lists.
+
+## Hot and ready on every NPC
+
+The model is warmed at scene load, and **every `QuestNpc` prefetches its line
+as soon as the model is warm** (`prefetchOnStart`, on by default) — not when
+the player approaches. Ollama queues the generations and works through the
+roster in the first seconds of play; by the time the player reaches any NPC,
+the line is cached and appears instantly. Proximity re-prefetch still fires if
+the player's profile changed since the cache was written.
+
+## Stress test (F5)
+
+Press **F5** in Play mode: the `QuestStressTest` component generates fresh
+dialogue for every NPC in the scene, several rounds in a row (configurable on
+QuestWeaverDemo), and shows a live on-screen table per generation:
+
+- **TTFT** — time to first token (what a player would feel with no prefetch)
+- **total** — wall time for the full line
+- **tok / tok/s** — length and throughput
+
+Round 1 includes prompt evaluation; later rounds show Ollama's prefix cache
+kicking in (TTFT drops hard). The summary line (avg TTFT / total / tok/s and
+the model tag) is the number to quote when someone asks "how fast is this
+in-engine?" — results also go to the console.
 
 ## Multiple NPCs
 
