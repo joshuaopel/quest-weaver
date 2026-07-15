@@ -1,5 +1,10 @@
 # ⚔ Quest Weaver — dynamic quest AI demo
 
+> ### 🧪 Testers start here
+> **New to this? Read [SETUP.md](SETUP.md)** — it walks you through the local
+> AI install step by step (the only tricky part). Windows fast path:
+> download this repo, double-click **`setup.bat`**, done.
+
 **One curated quest. A unique telling for every player.**
 
 Quest Weaver is a local, single-file webtool that demonstrates how AI can *assist*
