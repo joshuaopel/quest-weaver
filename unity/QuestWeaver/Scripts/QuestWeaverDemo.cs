@@ -78,6 +78,12 @@ namespace QuestWeaver
         [Tooltip("Rounds of the full NPC roster the F5 stress test runs")]
         public int stressTestRounds = 3;
 
+        [Header("CPU/GPU partitioning (0 / -1 = Ollama defaults)")]
+        [Tooltip("Max CPU threads for inference — cap it when running CPU-only so the game keeps cores")]
+        public int cpuThreads = 0;
+        [Tooltip("-1 = model on GPU (default). 0 = CPU-only inference: the whole GPU stays free for rendering — pair with cpuThreads")]
+        public int gpuLayers = -1;
+
         void Start()
         {
 #if !ENABLE_LEGACY_INPUT_MANAGER
@@ -89,6 +95,8 @@ namespace QuestWeaver
             var ollama = gameObject.AddComponent<OllamaClient>();
             ollama.baseUrl = ollamaUrl;
             ollama.model = model;
+            ollama.cpuThreads = cpuThreads;
+            ollama.gpuLayers = gpuLayers;
             ollama.Warmup();
 
             // --- environment ---
