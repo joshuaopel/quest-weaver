@@ -87,6 +87,39 @@ generations (typically fine — the second one still finishes long before the
 player finds their E key). Space quest givers ~15 m apart or shrink
 `prefetchRadius` if you pack them tighter.
 
+## Threads, cores, and the GPU — partitioning inference from rendering
+
+Good news first: **inference never runs on your game's threads.** Ollama is a
+separate process; Unity only streams the resulting text (background-thread
+I/O + microseconds of main-thread string appends). The real contention is
+resources, and the plugin gives you knobs for it (on `OllamaClient` /
+`QuestWeaverDemo`):
+
+- **`gpuLayers = -1`** (default): model runs on the GPU. Fastest tokens, but
+  inference compute + ~10 GB VRAM share the card with your draw calls.
+- **`gpuLayers = 0`**: force **CPU-only inference** — the entire GPU belongs
+  to rendering. Pair with **`cpuThreads`** (e.g. physical cores − 4) so Ollama
+  can't starve Unity's main/render/job threads. Tokens are slower, but the
+  prefetch design usually hides it.
+- **`cpuThreads`** also helps in GPU mode on weak CPUs (prompt processing uses
+  CPU threads too).
+
+Want hard core separation on top? Pin the Ollama process with Windows CPU
+affinity — e.g. give it 8 of 16 threads (PowerShell, after Ollama starts):
+
+```powershell
+Get-Process ollama* | ForEach-Object { $_.ProcessorAffinity = 0xFF00 }  # cores 8-15
+```
+
+On Intel hybrid CPUs, pinning Ollama to the E-cores while the game owns the
+P-cores is a clean split. You can also lower its priority:
+`Get-Process ollama* | %% { $_.PriorityClass = 'BelowNormal' }` — the game wins
+every contested cycle.
+
+Measure, don't guess: run the **F5 stress test** with `gpuLayers = -1` vs `0`
+and compare tok/s; run the webtool's **⚡ GPU Load Lab** to see the FPS cost of
+GPU inference on your exact card.
+
 ## Troubleshooting (Unity 6 / URP)
 
 - **Import dialog throws NullReferenceException** — you have an old copy of

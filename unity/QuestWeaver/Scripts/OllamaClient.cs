@@ -25,6 +25,20 @@ namespace QuestWeaver
         [Tooltip("How long Ollama keeps the model in VRAM after a request")]
         public string keepAlive = "30m";
 
+        [Header("CPU/GPU partitioning (0 / -1 = Ollama defaults)")]
+        [Tooltip("Max CPU threads Ollama may use for inference. When running CPU inference, set to physical cores minus ~4 so the game keeps cores. 0 = Ollama default.")]
+        public int cpuThreads = 0;
+        [Tooltip("Model layers offloaded to the GPU. -1 = default (as many as fit). 0 = force CPU-only inference and leave the ENTIRE GPU to rendering.")]
+        public int gpuLayers = -1;
+
+        string PartitionOpts()
+        {
+            string s = "";
+            if (cpuThreads > 0) s += ",\"num_thread\":" + cpuThreads;
+            if (gpuLayers >= 0) s += ",\"num_gpu\":" + gpuLayers;
+            return s;
+        }
+
         public bool IsWarm { get; private set; }
 
         /// <summary>Load the model into VRAM before anyone needs it (1-token request).</summary>
@@ -38,7 +52,7 @@ namespace QuestWeaver
             string body = "{\"model\":\"" + Esc(model) + "\",\"stream\":false," +
                           "\"keep_alive\":\"" + Esc(keepAlive) + "\"," +
                           "\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]," +
-                          "\"options\":{\"num_predict\":1}}";
+                          "\"options\":{\"num_predict\":1" + PartitionOpts() + "}}";
             using (var req = MakePost("/api/chat", body, new DownloadHandlerBuffer()))
             {
                 yield return req.SendWebRequest();
@@ -65,9 +79,10 @@ namespace QuestWeaver
                                 Action<string> onDelta, Action<string, string> onComplete)
         {
             bool qwen = model.IndexOf("qwen", StringComparison.OrdinalIgnoreCase) >= 0;
-            string options = qwen
-                ? "{\"num_predict\":" + maxTokens + ",\"temperature\":0.7,\"top_p\":0.8,\"top_k\":20}"
-                : "{\"num_predict\":" + maxTokens + ",\"temperature\":1.0,\"top_p\":0.95,\"top_k\":64}";
+            string options = (qwen
+                ? "{\"num_predict\":" + maxTokens + ",\"temperature\":0.7,\"top_p\":0.8,\"top_k\":20"
+                : "{\"num_predict\":" + maxTokens + ",\"temperature\":1.0,\"top_p\":0.95,\"top_k\":64")
+                + PartitionOpts() + "}";
 
             string body = "{\"model\":\"" + Esc(model) + "\",\"stream\":true," +
                           "\"keep_alive\":\"" + Esc(keepAlive) + "\"," +
