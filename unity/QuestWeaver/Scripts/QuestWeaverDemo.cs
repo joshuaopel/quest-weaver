@@ -80,6 +80,11 @@ namespace QuestWeaver
 
         void Start()
         {
+#if !ENABLE_LEGACY_INPUT_MANAGER
+            Debug.LogError("[QuestWeaver] This demo reads the classic Input Manager (WASD/E/F5), " +
+                "which is disabled in this project. Fix: Edit > Project Settings > Player > " +
+                "Other Settings > Active Input Handling = 'Both' (Unity restarts), then Play again.");
+#endif
             // --- LLM client (warm the model immediately: kills cold-start) ---
             var ollama = gameObject.AddComponent<OllamaClient>();
             ollama.baseUrl = ollamaUrl;
@@ -90,7 +95,7 @@ namespace QuestWeaver
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
             ground.transform.localScale = new Vector3(6, 1, 6);
-            ground.GetComponent<Renderer>().material.color = new Color(0.16f, 0.20f, 0.16f);
+            ground.GetComponent<Renderer>().material = MakeMat(new Color(0.16f, 0.20f, 0.16f));
 
             var lightGo = new GameObject("Sun");
             var sun = lightGo.AddComponent<Light>();
@@ -102,7 +107,7 @@ namespace QuestWeaver
             var player = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             player.name = "Player " + playerProfile.playerName;
             player.transform.position = new Vector3(0, 1.1f, -12f);
-            player.GetComponent<Renderer>().material.color = new Color(0.35f, 0.5f, 0.9f);
+            player.GetComponent<Renderer>().material = MakeMat(new Color(0.35f, 0.5f, 0.9f));
             UnityEngine.Object.Destroy(player.GetComponent<CapsuleCollider>());   // CharacterController replaces it
             var cc = player.AddComponent<CharacterController>();
             cc.height = 2f; cc.center = Vector3.zero;
@@ -124,6 +129,18 @@ namespace QuestWeaver
             stress.rounds = stressTestRounds;
         }
 
+        /// <summary>Pipeline-aware colored material: URP projects get URP/Lit,
+        /// built-in projects get Standard (avoids magenta primitives on Unity 6 URP templates).</summary>
+        static Material MakeMat(Color c)
+        {
+            var sh = Shader.Find("Universal Render Pipeline/Lit");
+            if (sh == null) sh = Shader.Find("HDRP/Lit");
+            if (sh == null) sh = Shader.Find("Standard");
+            var m = new Material(sh);
+            m.color = c;   // maps to the shader's [MainColor] property (_BaseColor on URP/HDRP)
+            return m;
+        }
+
         static void SpawnNpc(NpcSpawn spawn, OllamaClient ollama)
         {
             var quest = ScriptableObject.CreateInstance<QuestDefinition>();
@@ -134,7 +151,7 @@ namespace QuestWeaver
             var npc = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             npc.name = "NPC " + spawn.npcName;
             npc.transform.position = spawn.position;
-            npc.GetComponent<Renderer>().material.color = spawn.color;
+            npc.GetComponent<Renderer>().material = MakeMat(spawn.color);
             UnityEngine.Object.Destroy(npc.GetComponent<CapsuleCollider>());
             var questNpc = npc.AddComponent<QuestNpc>();          // adds its own trigger sphere
             questNpc.npcName = spawn.npcName;
@@ -149,7 +166,7 @@ namespace QuestWeaver
             marker.transform.SetParent(npc.transform, false);
             marker.transform.localPosition = new Vector3(0, 1.6f, 0);
             marker.transform.localScale = new Vector3(0.15f, 0.5f, 0.15f);
-            marker.GetComponent<Renderer>().material.color = new Color(1f, 0.85f, 0.2f);
+            marker.GetComponent<Renderer>().material = MakeMat(new Color(1f, 0.85f, 0.2f));
             UnityEngine.Object.Destroy(marker.GetComponent<BoxCollider>());
 
             // floating name tag that faces the player

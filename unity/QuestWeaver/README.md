@@ -87,6 +87,20 @@ generations (typically fine — the second one still finishes long before the
 player finds their E key). Space quest givers ~15 m apart or shrink
 `prefetchRadius` if you pack them tighter.
 
+## Troubleshooting (Unity 6 / URP)
+
+- **Import dialog throws NullReferenceException** — you have an old copy of
+  the package; re-download it (fixed for Unity 6's stricter importer). Or skip
+  the package entirely: copy the `QuestWeaver` folder into `Assets/`.
+- **WASD/E/F5 do nothing + InvalidOperationException about the Input System** —
+  Unity 6 URP templates default to the new Input System. Fix: Edit → Project
+  Settings → Player → Other Settings → **Active Input Handling = Both**
+  (Unity restarts). The demo logs this exact instruction on Play.
+- **Everything is magenta/pink** — old copy of the scripts; update. The demo
+  now picks URP/Lit (or HDRP/Lit, or Standard) automatically per pipeline.
+- **NPCs stay silent, Console says warmup failed** — Ollama isn't running or
+  the Model field names a model you haven't pulled (`ollama list` to check).
+
 ## Using it in your own scene
 
 - Put `OllamaClient` on any persistent GameObject; call `Warmup()` at load.
